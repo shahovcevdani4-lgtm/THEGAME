@@ -56,13 +56,16 @@ class Player:
         self.y = y
 
     def leave_footprint(
-        self, screen_coords: tuple[int, int], position: tuple[int, int], limit: int = 2
+        self,
+        screen_coords: tuple[int, int],
+        position: tuple[int, int],
+        limit: int | None = None,
     ) -> None:
         footprints = self._footprints.setdefault(screen_coords, [])
         if position in footprints:
             footprints.remove(position)
         footprints.append(position)
-        if len(footprints) > limit:
+        if limit is not None and len(footprints) > limit:
             del footprints[0 : len(footprints) - limit]
 
     def get_footprints(self, screen_coords: tuple[int, int]) -> list[tuple[int, int]]:
