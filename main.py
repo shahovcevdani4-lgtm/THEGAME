@@ -1,13 +1,17 @@
 # main.py
 import os
 from pathlib import Path
+from typing import Iterator, Tuple
+
 import tcod
 from tcod.event import KeySym
 
 from data.classes import CLASSES
+from data.enemies import ENEMIES
+from engine.battle import Battle, Enemy
 from engine.mapgen import generate_map
 from engine.player import Player
-from engine.ui import draw_map, show_class_menu
+from engine.ui import draw_battle_ui, draw_map, show_class_menu
 
 # размеры карты и окна (под tileset 10x10 — 40x25 хорошо помещается)
 MAP_WIDTH = 40
@@ -15,7 +19,54 @@ MAP_HEIGHT = 25
 SCREEN_WIDTH = MAP_WIDTH
 SCREEN_HEIGHT = MAP_HEIGHT
 
-FONT_FILE = "dejavu10x10_gs_tc.png"  # можно заменить или удалить — см. try/except ниже
+FONT_ENV_VAR = "ROGUELIKE_FONT"
+FONT_PRIORITY = (
+    Path("data/fonts/main.ttf"),
+    Path("data/fonts/main.otf"),
+    Path("dejavu10x10_gs_tc.png"),
+)
+
+
+def load_tileset(font_file: "str | os.PathLike[str]") -> "tcod.tileset.Tileset | None":
+    """Загрузить тайлсет, поддерживая как PNG, так и TTF/OTF."""
+
+    path = Path(font_file)
+    if not path.exists():
+        return None
+
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".png":
+            return tcod.tileset.load_tilesheet(
+                str(path), 32, 8, tcod.tileset.CHARMAP_TCOD
+            )
+        if suffix in {".ttf", ".otf"}:
+            return tcod.tileset.load_truetype_font(
+                str(path), 32, 8, tcod.tileset.CHARMAP_TCOD
+            )
+    except Exception as exc:  # pragma: no cover - выводим предупреждение в консоль
+        print(f"Не удалось загрузить шрифт {path}: {exc}")
+    return None
+
+
+def iter_font_candidates() -> Iterator[Path]:
+    """Перечислить пути к шрифтам в порядке приоритета."""
+
+    override = os.environ.get(FONT_ENV_VAR)
+    if override:
+        yield Path(override)
+    for candidate in FONT_PRIORITY:
+        yield Path(candidate)
+
+
+def load_preferred_tileset() -> Tuple["tcod.tileset.Tileset | None", Path | None]:
+    """Подобрать подходящий шрифт, учитывая override и стандартные пути."""
+
+    for candidate in iter_font_candidates():
+        tileset = load_tileset(candidate)
+        if tileset is not None:
+            return tileset, candidate
+    return None, None
 
 def find_spawn(game_map):
     """Найти проходимую клетку, стараясь ближе к центру."""
@@ -30,12 +81,33 @@ def find_spawn(game_map):
                     return x, y
     return 0, 0  # на всякий случай
 
+def find_random_walkable(game_map, exclude=None):
+    import random
+
+    width = len(game_map[0])
+    height = len(game_map)
+    exclude = set(exclude or [])
+    attempts = 0
+    while attempts < 500:
+        x = random.randint(0, width - 1)
+        y = random.randint(0, height - 1)
+        if (x, y) in exclude:
+            attempts += 1
+            continue
+        if game_map[y][x]["walkable"]:
+            return x, y
+        attempts += 1
+    return 0, 0
+
+
 def main():
-    # Пытаемся загрузить красивый шрифт; если его нет — идём с дефолтом
-    tileset = None
-    if Path(FONT_FILE).exists():
-        tileset = tcod.tileset.load_tilesheet(
-            FONT_FILE, 32, 8, tcod.tileset.CHARMAP_TCOD
+    # Пытаемся подобрать шрифт в порядке приоритета; если не нашли — идём с дефолтом
+    tileset, used_font = load_preferred_tileset()
+    if used_font is not None:
+        print(f"Используем шрифт: {used_font}")
+    else:
+        print(
+            "Не удалось найти подходящий шрифт в data/fonts/ — будет использован стандартный tileset."
         )
 
     with tcod.context.new_terminal(
@@ -57,16 +129,55 @@ def main():
 
         # Спавн игрока
         sx, sy = find_spawn(game_map)
-        player = Player(sx, sy)
+        player = Player(sx, sy, stats=chosen_class)
+
+        enemies = []
+        ex, ey = find_random_walkable(game_map, exclude={(player.x, player.y)})
+        toad_data = ENEMIES["stinky_forest_toad"]
+        enemy = Enemy(
+            name=toad_data["name"],
+            char=toad_data["char"],
+            fg=toad_data["fg"],
+            bg=toad_data["bg"],
+            max_hp=toad_data["hp"],
+            attack_min=toad_data["attack_min"],
+            attack_max=toad_data["attack_max"],
+            reward_talents=toad_data["reward_talents"],
+            stats=toad_data["stats"],
+            x=ex,
+            y=ey,
+        )
+        enemies.append(enemy)
+
+        current_battle = None
 
         # Игровой цикл
         while True:
             console.clear()
-            draw_map(console, game_map, player)
+            talents_text = f"Talents: {player.talents}"
+            draw_map(
+                console,
+                game_map,
+                player,
+                enemies=enemies,
+                hide_enemies=current_battle is not None,
+            )
 
             # строка статусов (кратко показываем выбранный класс и статы)
-            info = f"{chosen_class['name']} | STR {chosen_class['str']}  DEX {chosen_class['dex']}  INT {chosen_class['int']}"
+            info = (
+                f"{chosen_class['name']} | STR {player.strength}  DEX {player.dexterity}  INT {player.intelligence}"
+            )
             console.print(0, 0, info)
+
+            if current_battle:
+                draw_battle_ui(console, current_battle, talents_text)
+            else:
+                console.print(
+                    SCREEN_WIDTH - len(talents_text),
+                    SCREEN_HEIGHT - 1,
+                    talents_text,
+                    fg=(255, 255, 0),
+                )
 
             context.present(console)
 
@@ -74,21 +185,57 @@ def main():
                 if event.type == "QUIT":
                     raise SystemExit()
                 elif event.type == "KEYDOWN":
-                    dx = 0
-                    dy = 0
-                    if event.sym == KeySym.W:
-                        dy = -1
-                    elif event.sym == KeySym.S:
-                        dy = 1
-                    elif event.sym == KeySym.A:
-                        dx = -1
-                    elif event.sym == KeySym.D:
-                        dx = 1
-                    elif event.sym == KeySym.ESCAPE:
-                        raise SystemExit()
+                    if current_battle:
+                        handled = False
+                        if event.sym in (KeySym.N1, KeySym.KP_1):
+                            current_battle.attack_round()
+                            handled = True
+                        elif event.sym in (KeySym.N2, KeySym.KP_2):
+                            current_battle.run_away()
+                            handled = True
+                        elif event.sym in (KeySym.N3, KeySym.KP_3):
+                            current_battle.bribe()
+                            handled = True
+                        elif event.sym == KeySym.ESCAPE:
+                            raise SystemExit()
 
-                    if dx or dy:
-                        player.move(dx, dy, game_map)
+                        if handled and current_battle.finished:
+                            if current_battle.result == "defeat":
+                                context.present(console)
+                                raise SystemExit("Вы пали в бою.")
+                            if current_battle.result in {"victory", "bribe", "run"}:
+                                if current_battle.enemy in enemies:
+                                    if current_battle.result == "run":
+                                        current_battle.enemy.hp = current_battle.enemy.max_hp
+                                        player.x, player.y = current_battle.previous_position
+                                    else:
+                                        enemies.remove(current_battle.enemy)
+                            current_battle = None
+                        break
+
+                    else:
+                        dx = 0
+                        dy = 0
+                        if event.sym == KeySym.W:
+                            dy = -1
+                        elif event.sym == KeySym.S:
+                            dy = 1
+                        elif event.sym == KeySym.A:
+                            dx = -1
+                        elif event.sym == KeySym.D:
+                            dx = 1
+                        elif event.sym == KeySym.ESCAPE:
+                            raise SystemExit()
+
+                        if dx or dy:
+                            previous_position = (player.x, player.y)
+                            moved = player.move(dx, dy, game_map)
+                            if moved:
+                                for enemy in enemies:
+                                    if not enemy.defeated and player.x == enemy.x and player.y == enemy.y:
+                                        current_battle = Battle(player, enemy, previous_position)
+                                        break
+                        break
 
 if __name__ == "__main__":
     main()
