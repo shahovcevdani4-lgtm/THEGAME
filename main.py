@@ -42,7 +42,7 @@ def load_tileset(font_file: "str | os.PathLike[str]") -> "tcod.tileset.Tileset |
             )
         if suffix in {".ttf", ".otf"}:
             return tcod.tileset.load_truetype_font(
-                str(path), 32, 8, tcod.tileset.CHARMAP_TCOD
+                str(path), 32, 8, charmap=tcod.tileset.CHARMAP_TCOD
             )
     except Exception as exc:  # pragma: no cover - выводим предупреждение в консоль
         print(f"Не удалось загрузить шрифт {path}: {exc}")
