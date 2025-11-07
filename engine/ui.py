@@ -20,18 +20,19 @@ def draw_map(console, game_map, player, enemies=None, hide_enemies=False):
     )
 
 def show_class_menu(console, context, classes):
-    console.clear()
-    console.print(0, 0, "Выбери класс:")
-    y = 2
+    lines = ["Выбери класс:", ""]
     for i, (cid, cls) in enumerate(classes.items(), start=1):
-        console.print(0, y, f"[{i}] {cls['name']} (STR {cls['str']} / DEX {cls['dex']} / INT {cls['int']})")
-        y += 1
+        lines.append(
+            f"[{i}] {cls['name']} (STR {cls['str']} / DEX {cls['dex']} / INT {cls['int']})"
+        )
+
+    console.clear()
+    draw_text_window(console, lines, padding=2)
     context.present(console)
 
     while True:
         for event in tcod.event.wait():
             if event.type == "KEYDOWN":
-                # новые enum-коды клавиш
                 if event.sym in (KeySym.N1, KeySym.KP_1):
                     return list(classes.keys())[0]
                 if event.sym in (KeySym.N2, KeySym.KP_2):
