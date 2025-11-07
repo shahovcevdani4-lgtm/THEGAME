@@ -69,20 +69,40 @@ def draw_text_window(
         console.print(text_x, text_y + i, line, fg=fg_color, bg=bg_color)
 
 
-def draw_map(console, game_map, player, enemies=None, hide_enemies=False):
+def draw_map(
+    console,
+    game_map,
+    player,
+    *,
+    enemies=None,
+    hide_enemies=False,
+    footprints=None,
+    footprint_tile=None,
+):
     for y, row in enumerate(game_map):
         for x, tile in enumerate(row):
             console.print(x, y, tile["char"], fg=tile["fg"], bg=tile["bg"])
+    if footprints and footprint_tile:
+        for fx, fy in footprints:
+            if 0 <= fy < console.height and 0 <= fx < console.width:
+                console.print(
+                    fx,
+                    fy,
+                    footprint_tile["char"],
+                    fg=footprint_tile["fg"],
+                    bg=footprint_tile["bg"],
+                )
     if enemies and not hide_enemies:
         for enemy in enemies:
             if enemy and not enemy.defeated:
                 console.print(enemy.x, enemy.y, enemy.char, fg=enemy.fg, bg=enemy.bg)
+    player_tile_bg = game_map[player.y][player.x]["bg"]
     console.print(
         player.x,
         player.y,
         player.tile["char"],
         fg=player.tile["fg"],
-        bg=player.tile["bg"],
+        bg=player_tile_bg,
     )
 
 def show_class_menu(console, context, classes):
