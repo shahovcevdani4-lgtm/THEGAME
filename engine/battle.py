@@ -18,6 +18,8 @@ class Enemy:
     stats: dict
     x: int
     y: int
+    screen_x: int
+    screen_y: int
     hp: Optional[int] = None
     defeated: bool = False
 
@@ -44,10 +46,15 @@ class Enemy:
 
 
 class Battle:
-    def __init__(self, player, enemy: Enemy, previous_position: Tuple[int, int]):
+    def __init__(
+        self,
+        player,
+        enemy: Enemy,
+        previous_state: Tuple[int, int, int, int],
+    ):
         self.player = player
         self.enemy = enemy
-        self.previous_position = previous_position
+        self.previous_state = previous_state
         self.log: List[str] = [f"Вы вступили в бой с {enemy.name}!"]
         self.finished = False
         self.result: Optional[str] = None
