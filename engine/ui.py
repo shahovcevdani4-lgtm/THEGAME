@@ -1,6 +1,42 @@
 # engine/ui.py
+from __future__ import annotations
+
+from textwrap import wrap
+
 import tcod
 from tcod.event import KeySym
+
+
+def draw_text_window(console, lines, padding: int = 1) -> None:
+    """Отрисовать текстовое окно по центру консоли."""
+
+    if not lines:
+        return
+
+    max_content_width = max(1, console.width - 2 * padding - 2)
+
+    processed_lines = []
+    for line in lines:
+        if line == "":
+            processed_lines.append("")
+            continue
+        wrapped = wrap(line, max_content_width) or [""]
+        processed_lines.extend(wrapped)
+
+    inner_width = min(max(len(line) for line in processed_lines), max_content_width)
+    frame_width = inner_width + 2 * padding + 2
+    frame_height = len(processed_lines) + 2 * padding + 2
+
+    start_x = max(0, (console.width - frame_width) // 2)
+    start_y = max(0, (console.height - frame_height) // 2)
+
+    console.draw_frame(start_x, start_y, frame_width, frame_height, clear=False)
+
+    text_x = start_x + padding + 1
+    text_y = start_y + padding + 1
+
+    for i, line in enumerate(processed_lines):
+        console.print(text_x, text_y + i, line)
 
 
 def draw_map(console, game_map, player, enemies=None, hide_enemies=False):
