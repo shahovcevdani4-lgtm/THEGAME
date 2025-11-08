@@ -137,31 +137,31 @@ def main():
                     break
 
                 if inventory_open:
-                    if event.sym == KeySym.I:
+                    if event.sym in (KeySym.I, KeySym.i):
                         inventory_open = False
-                    elif event.sym == KeySym.W:
+                    elif event.sym in (KeySym.W, KeySym.w):
                         player.inventory.move_cursor(0, -1)
-                    elif event.sym == KeySym.S:
+                    elif event.sym in (KeySym.S, KeySym.s):
                         player.inventory.move_cursor(0, 1)
-                    elif event.sym == KeySym.A:
+                    elif event.sym in (KeySym.A, KeySym.a):
                         player.inventory.move_cursor(-1, 0)
-                    elif event.sym == KeySym.D:
+                    elif event.sym in (KeySym.D, KeySym.d):
                         player.inventory.move_cursor(1, 0)
                     break
 
-                if event.sym == KeySym.I:
+                if event.sym in (KeySym.I, KeySym.i):
                     inventory_open = True
                     break
 
                 dx = 0
                 dy = 0
-                if event.sym == KeySym.W:
+                if event.sym in (KeySym.W, KeySym.w):
                     dy = -1
-                elif event.sym == KeySym.S:
+                elif event.sym in (KeySym.S, KeySym.s):
                     dy = 1
-                elif event.sym == KeySym.A:
+                elif event.sym in (KeySym.A, KeySym.a):
                     dx = -1
-                elif event.sym == KeySym.D:
+                elif event.sym in (KeySym.D, KeySym.d):
                     dx = 1
 
                 if dx == 0 and dy == 0:
