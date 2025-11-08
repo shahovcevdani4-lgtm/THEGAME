@@ -23,6 +23,7 @@ class Player:
         self.screen_x = screen_x
         self.screen_y = screen_y
         self.tile = tile or TILES["player"].copy()
+        self.tile_key = self.tile.get("tile_id", "player")
         self.name = name
         self.character_class = character_class
         self.stats = stats

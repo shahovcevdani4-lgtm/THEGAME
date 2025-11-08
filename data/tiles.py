@@ -21,24 +21,28 @@ BASE_TILES = {
         "fg": GRASS_GREEN,
         "bg": DARK_GREEN,
         "walkable": True,
+        "tile_id": "grass",
     },
     "tree": {
         "char": "/",  # дерево
         "fg": TREE_GREEN,
         "bg": DARK_GREEN,
         "walkable": False,
+        "tile_id": "tree",
     },
     "stone": {
         "char": "o",  # камень
         "fg": STONE_GRAY,
         "bg": DARK_GREEN,
         "walkable": False,
+        "tile_id": "stone",
     },
     "player": {
         "char": "@",
         "fg": PLAYER_GOLD,
         "bg": DARK_GREEN,
         "walkable": True,
+        "tile_id": "player",
     },
 }
 
@@ -60,6 +64,7 @@ BIOME_OVERRIDES = {
                 "fg": (200, 200, 230),
                 "bg": SNOW_WHITE,
                 "walkable": True,
+                "tile_id": "footprint",
             }
         },
     },

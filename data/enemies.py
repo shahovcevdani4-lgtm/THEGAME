@@ -10,6 +10,7 @@ ENEMIES = {
         "attack_min": 1,
         "attack_max": 2,
         "reward_talents": 2,
+        "tile": "enemy",
         "stats": {
             "str": 4,
             "agi": 3,
@@ -25,6 +26,7 @@ ENEMIES = {
         "attack_min": 1,
         "attack_max": 2,
         "reward_talents": 2,
+        "tile": "enemy",
         "stats": {
             "str": 4,
             "agi": 3,

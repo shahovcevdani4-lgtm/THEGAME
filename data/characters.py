@@ -6,6 +6,7 @@ CHARACTERS = {
         "char": "§",
         "fg": (180, 0, 200),
         "bg": (20, 0, 40),
+        "tile": "warlock",
         "stats": {
             "str": 4,
             "agi": 6,

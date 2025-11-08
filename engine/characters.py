@@ -25,6 +25,7 @@ class Character:
     screen_y: int
     inventory: Inventory = field(default_factory=Inventory)
     sprite: "Sprite | None" = None
+    tile_key: str | None = None
 
     @property
     def strength(self) -> int:

@@ -131,6 +131,7 @@ def build_world() -> World:
                         y=ey,
                         screen_x=sx,
                         screen_y=sy,
+                        tile_key=enemy_data.get("tile"),
                     )
                 )
 
@@ -165,6 +166,7 @@ def build_world() -> World:
                 y=wy,
                 screen_x=screen_coords[0],
                 screen_y=screen_coords[1],
+                tile_key=warlock_data.get("tile"),
             )
         )
 
