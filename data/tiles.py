@@ -1,9 +1,10 @@
 """Definitions for tiles and biome-specific palettes."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping, Sequence
+
+from data.loader import load_game_data
 
 
 @dataclass(frozen=True)
@@ -29,54 +30,93 @@ class BiomeDefinition:
     scatter_rules: Sequence[ScatterRule]
 
 
-# Base colours shared between tiles.  The renderer will fall back to these
-# values whenever a sprite image is missing, so they double as ASCII colours.
-PLAYER_GOLD = (240, 200, 80)
-ENEMY_RED = (120, 0, 40)
-WARLOCK_PURPLE = (180, 0, 200)
-WARLOCK_BG = (20, 0, 40)
-
-SUMMER_GRASS_FG = (20, 150, 40)
-SUMMER_GRASS_BG = (5, 70, 15)
-SUMMER_TREE_FG = (90, 200, 90)
-SUMMER_TREE_BG = SUMMER_GRASS_BG
-SUMMER_ROCK_FG = (130, 130, 130)
-
-WINTER_SNOW_FG = (230, 230, 255)
-WINTER_SNOW_BG = (210, 210, 235)
-WINTER_TREE_FG = (30, 90, 160)
-WINTER_TREE_BG = WINTER_SNOW_BG
-WINTER_SNOWDRIFT_FG = (200, 200, 230)
-
-DROUGHT_SAND_FG = (215, 180, 90)
-DROUGHT_SAND_BG = (170, 130, 60)
-DROUGHT_CACTUS_FG = (60, 140, 70)
-DROUGHT_WOOD_FG = (150, 90, 40)
+def _colour_tuple(value):
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return tuple(int(component) for component in value)
+    return tuple(value)
 
 
-COMMON_TILES: Mapping[str, dict] = {
-    "player": {
-        "char": "@",
-        "fg": PLAYER_GOLD,
-        "bg": None,
-        "walkable": True,
-        "tile_id": "player",
-    },
-    "enemy": {
-        "char": "E",
-        "fg": (255, 230, 230),
-        "bg": ENEMY_RED,
-        "walkable": False,
-        "tile_id": "enemy",
-    },
-    "warlock": {
-        "char": "§",
-        "fg": WARLOCK_PURPLE,
-        "bg": WARLOCK_BG,
-        "walkable": False,
-        "tile_id": "warlock",
-    },
-}
+def _normalise_tile(tile: Mapping[str, object]) -> dict[str, object]:
+    normalised = dict(tile)
+    for key in ("fg", "bg"):
+        if key in normalised:
+            normalised[key] = _colour_tuple(normalised[key])
+    if "sprite" in normalised and normalised["sprite"] is not None:
+        normalised["sprite"] = str(normalised["sprite"])
+    return normalised
+
+
+def _normalise_tileset(raw_tiles: Mapping[str, Mapping[str, object]]) -> dict[str, dict]:
+    return {str(name): _normalise_tile(data) for name, data in raw_tiles.items()}
+
+
+def _range_tuple(value) -> tuple[int, int]:
+    if isinstance(value, (list, tuple)):
+        values = list(value)
+    else:
+        return (0, 0)
+    if not values:
+        return (0, 0)
+    if len(values) == 1:
+        values = [values[0], values[0]]
+    return int(values[0]), int(values[1])
+
+
+def _normalise_biomes(raw_biomes: Mapping[str, Mapping[str, object]]) -> dict[str, dict]:
+    biomes: dict[str, dict] = {}
+    for name, config in raw_biomes.items():
+        normalised: dict[str, object] = dict(config)
+        normalised["unique_tiles"] = _normalise_tileset(
+            normalised.get("unique_tiles", {})  # type: ignore[arg-type]
+        )
+        overrides = normalised.get("overrides")
+        if isinstance(overrides, Mapping):
+            normalised["overrides"] = _normalise_tileset(overrides)
+        extras = normalised.get("extras")
+        if isinstance(extras, Mapping):
+            normalised["extras"] = _normalise_tileset(extras)
+        forest_tiles = normalised.get("forest_tiles", ())
+        if isinstance(forest_tiles, (list, tuple)):
+            normalised["forest_tiles"] = tuple(str(tile) for tile in forest_tiles)
+        else:
+            normalised["forest_tiles"] = ()
+        normalised["forest_count"] = _range_tuple(normalised.get("forest_count", (3, 6)))
+        normalised["forest_radius"] = _range_tuple(normalised.get("forest_radius", (2, 5)))
+        forest_density = normalised.get("forest_density", 0.7)
+        try:
+            normalised["forest_density"] = float(forest_density)
+        except (TypeError, ValueError):
+            normalised["forest_density"] = 0.7
+        rules = []
+        raw_rules = normalised.get("scatter_rules", [])
+        if isinstance(raw_rules, (list, tuple)):
+            for rule in raw_rules:
+                if isinstance(rule, Mapping):
+                    tile = str(rule.get("tile", ""))
+                    count_range = _range_tuple(rule.get("count_range", (0, 0)))
+                    avoid_border = bool(rule.get("avoid_border", True))
+                    rules.append(
+                        ScatterRule(
+                            tile=tile,
+                            count_range=count_range,
+                            avoid_border=avoid_border,
+                        )
+                    )
+        normalised["scatter_rules"] = tuple(rules)
+        biomes[str(name)] = normalised
+    return biomes
+
+
+def _load_tiles_data() -> tuple[dict[str, dict], dict[str, dict]]:
+    data = load_game_data().get("tiles", {})
+    common_tiles = _normalise_tileset(data.get("common_tiles", {}))
+    biomes = _normalise_biomes(data.get("biomes", {}))
+    return common_tiles, biomes
+
+
+COMMON_TILES, BIOME_CONFIGS = _load_tiles_data()
 
 
 def _build_tileset(config: Mapping[str, object]) -> tuple[dict[str, dict], str]:
@@ -104,7 +144,12 @@ def _build_tileset(config: Mapping[str, object]) -> tuple[dict[str, dict], str]:
         if tile.get("bg") is None:
             tile["bg"] = ground_bg
         if name in overrides:
-            tile.update(overrides[name])
+            override_tile = overrides[name]
+            override = dict(override_tile)
+            for key in ("fg", "bg"):
+                if key in override and override[key] is not None:
+                    override[key] = _colour_tuple(override[key])
+            tile.update(override)
         tiles[name] = tile
 
     for name, data in extras.items():
@@ -113,117 +158,6 @@ def _build_tileset(config: Mapping[str, object]) -> tuple[dict[str, dict], str]:
         tiles[name] = tile
 
     return tiles, ground_key
-
-
-BIOME_CONFIGS: Mapping[str, dict] = {
-    "summer": {
-        "ground_tile": "summer_ground",
-        "unique_tiles": {
-            "summer_ground": {
-                "char": ".",
-                "fg": SUMMER_GRASS_FG,
-                "bg": SUMMER_GRASS_BG,
-                "walkable": True,
-                "tile_id": "summer_ground",
-            },
-            "summer_tree": {
-                "char": "♣",
-                "fg": SUMMER_TREE_FG,
-                "bg": SUMMER_TREE_BG,
-                "walkable": False,
-                "tile_id": "summer_tree",
-            },
-            "summer_boulder": {
-                "char": "▲",
-                "fg": SUMMER_ROCK_FG,
-                "bg": SUMMER_GRASS_BG,
-                "walkable": False,
-                "tile_id": "summer_boulder",
-            },
-        },
-        "forest_tiles": ("summer_tree",),
-        "forest_count": (3, 6),
-        "forest_radius": (2, 5),
-        "forest_density": 0.7,
-        "scatter_rules": (ScatterRule("summer_boulder", (12, 22)),),
-    },
-    "winter": {
-        "ground_tile": "winter_ground",
-        "unique_tiles": {
-            "winter_ground": {
-                "char": "·",
-                "fg": WINTER_SNOW_FG,
-                "bg": WINTER_SNOW_BG,
-                "walkable": True,
-                "tile_id": "winter_ground",
-            },
-            "winter_tree": {
-                "char": "Y",
-                "fg": WINTER_TREE_FG,
-                "bg": WINTER_TREE_BG,
-                "walkable": False,
-                "tile_id": "winter_tree",
-            },
-            "winter_snowdrift": {
-                "char": "~",
-                "fg": WINTER_SNOWDRIFT_FG,
-                "bg": WINTER_SNOW_BG,
-                "walkable": True,
-                "tile_id": "winter_snowdrift",
-            },
-        },
-        "forest_tiles": ("winter_tree",),
-        "forest_count": (3, 6),
-        "forest_radius": (2, 5),
-        "forest_density": 0.7,
-        "scatter_rules": (
-            ScatterRule("winter_snowdrift", (18, 28), avoid_border=False),
-        ),
-        "extras": {
-            "footprint": {
-                "char": "'",
-                "fg": WINTER_SNOWDRIFT_FG,
-                "bg": WINTER_SNOW_BG,
-                "walkable": True,
-                "tile_id": "footprint",
-            }
-        },
-    },
-    "drought": {
-        "ground_tile": "drought_ground",
-        "unique_tiles": {
-            "drought_ground": {
-                "char": "`",
-                "fg": DROUGHT_SAND_FG,
-                "bg": DROUGHT_SAND_BG,
-                "walkable": True,
-                "tile_id": "drought_ground",
-            },
-            "drought_cactus": {
-                "char": "†",
-                "fg": DROUGHT_CACTUS_FG,
-                "bg": DROUGHT_SAND_BG,
-                "walkable": False,
-                "tile_id": "drought_cactus",
-            },
-            "drought_dead_tree": {
-                "char": "T",
-                "fg": DROUGHT_WOOD_FG,
-                "bg": DROUGHT_SAND_BG,
-                "walkable": False,
-                "tile_id": "drought_dead_tree",
-            },
-        },
-        "forest_tiles": ("drought_cactus", "drought_dead_tree"),
-        "forest_count": (3, 6),
-        "forest_radius": (2, 5),
-        "forest_density": 0.6,
-        "scatter_rules": (
-            ScatterRule("drought_cactus", (8, 14)),
-            ScatterRule("drought_dead_tree", (6, 12)),
-        ),
-    },
-}
 
 
 def _build_biome(name: str, config: Mapping[str, object]) -> BiomeDefinition:
@@ -247,7 +181,7 @@ def get_biome_definition(biome: str) -> BiomeDefinition:
     """Return the biome definition with cached construction."""
 
     if biome not in _BIOME_CACHE:
-        config = BIOME_CONFIGS.get(biome, BIOME_CONFIGS["summer"])
+        config = BIOME_CONFIGS.get(biome, BIOME_CONFIGS.get("summer", {}))
         _BIOME_CACHE[biome] = _build_biome(biome, config)
     return _BIOME_CACHE[biome]
 
@@ -260,4 +194,3 @@ def get_biome_tiles(biome: str) -> dict[str, dict]:
 
 # Default tile set used for player initialization and ASCII fallback.
 TILES = get_biome_tiles("summer")
-
