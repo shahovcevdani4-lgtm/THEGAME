@@ -1,107 +1,29 @@
 # main.py
-import os
-from pathlib import Path
-from typing import Iterator, Tuple
+from __future__ import annotations
 
 import tcod
 from tcod.event import KeySym
 
 from data.classes import CLASSES
-from data.enemies import ENEMIES
-from engine.battle import Battle, Enemy
-from engine.mapgen import generate_map
-from engine.player import Player
-from engine.ui import draw_battle_ui, draw_map, show_class_menu
-
-# размеры карты и окна (под tileset 10x10 — 40x25 хорошо помещается)
-MAP_WIDTH = 40
-MAP_HEIGHT = 25
-SCREEN_WIDTH = MAP_WIDTH
-SCREEN_HEIGHT = MAP_HEIGHT
-
-FONT_ENV_VAR = "ROGUELIKE_FONT"
-FONT_PRIORITY = (
-    Path("data/fonts/main.ttf"),
-    Path("data/fonts/main.otf"),
-    Path("dejavu10x10_gs_tc.png"),
+from engine.assets import load_preferred_tileset
+from engine.battle import Battle
+from engine.constants import (
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    WORLD_COLUMNS,
+    WORLD_ROWS,
 )
-
-
-def load_tileset(font_file: "str | os.PathLike[str]") -> "tcod.tileset.Tileset | None":
-    """Загрузить тайлсет, поддерживая как PNG, так и TTF/OTF."""
-
-    path = Path(font_file)
-    if not path.exists():
-        return None
-
-    suffix = path.suffix.lower()
-    try:
-        if suffix == ".png":
-            return tcod.tileset.load_tilesheet(
-                str(path), 32, 8, tcod.tileset.CHARMAP_TCOD
-            )
-        if suffix in {".ttf", ".otf"}:
-            return tcod.tileset.load_truetype_font(
-                str(path), 32, 8, charmap=tcod.tileset.CHARMAP_TCOD
-            )
-    except Exception as exc:  # pragma: no cover - выводим предупреждение в консоль
-        print(f"Не удалось загрузить шрифт {path}: {exc}")
-    return None
-
-
-def iter_font_candidates() -> Iterator[Path]:
-    """Перечислить пути к шрифтам в порядке приоритета."""
-
-    override = os.environ.get(FONT_ENV_VAR)
-    if override:
-        yield Path(override)
-    for candidate in FONT_PRIORITY:
-        yield Path(candidate)
-
-
-def load_preferred_tileset() -> Tuple["tcod.tileset.Tileset | None", Path | None]:
-    """Подобрать подходящий шрифт, учитывая override и стандартные пути."""
-
-    for candidate in iter_font_candidates():
-        tileset = load_tileset(candidate)
-        if tileset is not None:
-            return tileset, candidate
-    return None, None
-
-def find_spawn(game_map):
-    """Найти проходимую клетку, стараясь ближе к центру."""
-    cx, cy = MAP_WIDTH // 2, MAP_HEIGHT // 2
-    if game_map[cy][cx]["walkable"]:
-        return cx, cy
-    # если центр занят — простой поиск по спирали
-    for r in range(1, max(MAP_WIDTH, MAP_HEIGHT)):
-        for y in range(max(0, cy - r), min(MAP_HEIGHT, cy + r + 1)):
-            for x in range(max(0, cx - r), min(MAP_WIDTH, cx + r + 1)):
-                if game_map[y][x]["walkable"]:
-                    return x, y
-    return 0, 0  # на всякий случай
-
-def find_random_walkable(game_map, exclude=None):
-    import random
-
-    width = len(game_map[0])
-    height = len(game_map)
-    exclude = set(exclude or [])
-    attempts = 0
-    while attempts < 500:
-        x = random.randint(0, width - 1)
-        y = random.randint(0, height - 1)
-        if (x, y) in exclude:
-            attempts += 1
-            continue
-        if game_map[y][x]["walkable"]:
-            return x, y
-        attempts += 1
-    return 0, 0
+from engine.player import Player
+from engine.ui import (
+    draw_battle_ui,
+    draw_inventory,
+    draw_map,
+    show_class_menu,
+)
+from engine.world import build_world
 
 
 def main():
-    # Пытаемся подобрать шрифт в порядке приоритета; если не нашли — идём с дефолтом
     tileset, used_font = load_preferred_tileset()
     if used_font is not None:
         print(f"Используем шрифт: {used_font}")
@@ -119,123 +41,210 @@ def main():
     ) as context:
         console = tcod.console.Console(SCREEN_WIDTH, SCREEN_HEIGHT, order="F")
 
-        # Меню выбора класса
         chosen_id = show_class_menu(console, context, CLASSES)
         chosen_class = CLASSES[chosen_id]
-        # (пока просто фиксируем выбор; позже сюда подвяжем расчёт HP/урона и т.д.)
 
-        # Генерация карты
-        game_map = generate_map(MAP_WIDTH, MAP_HEIGHT)
+        world = build_world()
+        spawn_screen = world.spawn_screen
+        spawn_x, spawn_y = world.spawn_position
 
-        # Спавн игрока
-        sx, sy = find_spawn(game_map)
-        player = Player(sx, sy, stats=chosen_class)
-
-        enemies = []
-        ex, ey = find_random_walkable(game_map, exclude={(player.x, player.y)})
-        toad_data = ENEMIES["stinky_forest_toad"]
-        enemy = Enemy(
-            name=toad_data["name"],
-            char=toad_data["char"],
-            fg=toad_data["fg"],
-            bg=toad_data["bg"],
-            max_hp=toad_data["hp"],
-            attack_min=toad_data["attack_min"],
-            attack_max=toad_data["attack_max"],
-            reward_talents=toad_data["reward_talents"],
-            stats=toad_data["stats"],
-            x=ex,
-            y=ey,
+        player = Player(
+            spawn_x,
+            spawn_y,
+            stats=chosen_class,
+            screen_x=spawn_screen[0],
+            screen_y=spawn_screen[1],
         )
-        enemies.append(enemy)
 
-        current_battle = None
+        current_battle: Battle | None = None
+        inventory_open = False
 
-        # Игровой цикл
         while True:
             console.clear()
-            talents_text = f"Talents: {player.talents}"
+            current_screen = (player.screen_x, player.screen_y)
+            world_screen = world.get_screen(current_screen)
+            game_map = world_screen.terrain
+            footprints = player.get_footprints(current_screen)
+            footprint_tile = world_screen.tiles.get("footprint")
             draw_map(
                 console,
                 game_map,
                 player,
-                enemies=enemies,
+                enemies=world_screen.enemies,
                 hide_enemies=current_battle is not None,
+                footprints=footprints,
+                footprint_tile=footprint_tile,
             )
 
-            # строка статусов (кратко показываем выбранный класс и статы)
             info = (
                 f"{chosen_class['name']} | STR {player.strength}  DEX {player.dexterity}  INT {player.intelligence}"
             )
             console.print(0, 0, info)
 
+            talents_label = f"Золотые таланты: {player.talents}"
+
             if current_battle:
-                draw_battle_ui(console, current_battle, talents_text)
-            else:
-                console.print(
-                    SCREEN_WIDTH - len(talents_text),
-                    SCREEN_HEIGHT - 1,
-                    talents_text,
-                    fg=(255, 255, 0),
-                )
+                draw_battle_ui(console, current_battle, talents_label)
+            elif inventory_open:
+                draw_inventory(console, player.inventory, talents_label)
 
             context.present(console)
 
             for event in tcod.event.wait():
                 if event.type == "QUIT":
                     raise SystemExit()
-                elif event.type == "KEYDOWN":
-                    if current_battle:
-                        handled = False
-                        if event.sym in (KeySym.N1, KeySym.KP_1):
-                            current_battle.attack_round()
-                            handled = True
-                        elif event.sym in (KeySym.N2, KeySym.KP_2):
-                            current_battle.run_away()
-                            handled = True
-                        elif event.sym in (KeySym.N3, KeySym.KP_3):
-                            current_battle.bribe()
-                            handled = True
-                        elif event.sym == KeySym.ESCAPE:
-                            raise SystemExit()
+                if event.type != "KEYDOWN":
+                    continue
 
-                        if handled and current_battle.finished:
-                            if current_battle.result == "defeat":
-                                context.present(console)
-                                raise SystemExit("Вы пали в бою.")
-                            if current_battle.result in {"victory", "bribe", "run"}:
-                                if current_battle.enemy in enemies:
-                                    if current_battle.result == "run":
-                                        current_battle.enemy.hp = current_battle.enemy.max_hp
-                                        player.x, player.y = current_battle.previous_position
-                                    else:
-                                        enemies.remove(current_battle.enemy)
-                            current_battle = None
-                        break
+                if event.sym == KeySym.ESCAPE:
+                    raise SystemExit()
 
+                if current_battle:
+                    handled = False
+                    if event.sym in (KeySym.N1, KeySym.KP_1):
+                        current_battle.attack_round()
+                        handled = True
+                    elif event.sym in (KeySym.N2, KeySym.KP_2):
+                        current_battle.run_away()
+                        handled = True
+                    elif event.sym in (KeySym.N3, KeySym.KP_3):
+                        current_battle.bribe()
+                        handled = True
+
+                    if handled and current_battle.finished:
+                        if current_battle.result == "defeat":
+                            context.present(console)
+                            raise SystemExit("Вы пали в бою.")
+                        if current_battle.result in {"victory", "bribe", "run"}:
+                            enemy_screen = (
+                                current_battle.enemy.screen_x,
+                                current_battle.enemy.screen_y,
+                            )
+                            screen_enemies = world.enemies_at(enemy_screen)
+                            if current_battle.result == "run":
+                                current_battle.enemy.hp = current_battle.enemy.max_hp
+                                (
+                                    prev_screen_x,
+                                    prev_screen_y,
+                                    prev_x,
+                                    prev_y,
+                                ) = current_battle.previous_state
+                                player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
+                            else:
+                                if current_battle.enemy in screen_enemies:
+                                    screen_enemies.remove(current_battle.enemy)
+                        current_battle = None
+                    break
+
+                if inventory_open:
+                    if event.sym in (KeySym.I, KeySym.i):
+                        inventory_open = False
+                    elif event.sym in (KeySym.W, KeySym.w):
+                        player.inventory.move_cursor(0, -1)
+                    elif event.sym in (KeySym.S, KeySym.s):
+                        player.inventory.move_cursor(0, 1)
+                    elif event.sym in (KeySym.A, KeySym.a):
+                        player.inventory.move_cursor(-1, 0)
+                    elif event.sym in (KeySym.D, KeySym.d):
+                        player.inventory.move_cursor(1, 0)
+                    break
+
+                if event.sym in (KeySym.I, KeySym.i):
+                    inventory_open = True
+                    break
+
+                dx = 0
+                dy = 0
+                if event.sym in (KeySym.W, KeySym.w):
+                    dy = -1
+                elif event.sym in (KeySym.S, KeySym.s):
+                    dy = 1
+                elif event.sym in (KeySym.A, KeySym.a):
+                    dx = -1
+                elif event.sym in (KeySym.D, KeySym.d):
+                    dx = 1
+
+                if dx == 0 and dy == 0:
+                    break
+
+                previous_state = player.position()
+                previous_screen_coords = (player.screen_x, player.screen_y)
+                previous_tile = (player.x, player.y)
+
+                current_map = world.map_at(previous_screen_coords)
+                new_x = player.x + dx
+                new_y = player.y + dy
+                screen_dx = 0
+                screen_dy = 0
+                blocked = False
+
+                if new_x < 0:
+                    if player.screen_x > 0:
+                        screen_dx = -1
+                        new_x = len(current_map[0]) - 1
                     else:
-                        dx = 0
-                        dy = 0
-                        if event.sym == KeySym.W:
-                            dy = -1
-                        elif event.sym == KeySym.S:
-                            dy = 1
-                        elif event.sym == KeySym.A:
-                            dx = -1
-                        elif event.sym == KeySym.D:
-                            dx = 1
-                        elif event.sym == KeySym.ESCAPE:
-                            raise SystemExit()
+                        blocked = True
+                elif new_x >= len(current_map[0]):
+                    if player.screen_x < WORLD_COLUMNS - 1:
+                        screen_dx = 1
+                        new_x = 0
+                    else:
+                        blocked = True
 
-                        if dx or dy:
-                            previous_position = (player.x, player.y)
-                            moved = player.move(dx, dy, game_map)
-                            if moved:
-                                for enemy in enemies:
-                                    if not enemy.defeated and player.x == enemy.x and player.y == enemy.y:
-                                        current_battle = Battle(player, enemy, previous_position)
-                                        break
+                if blocked:
+                    break
+
+                if new_y < 0:
+                    if player.screen_y > 0:
+                        screen_dy = -1
+                        new_y = len(current_map) - 1
+                    else:
+                        blocked = True
+                elif new_y >= len(current_map):
+                    if player.screen_y < WORLD_ROWS - 1:
+                        screen_dy = 1
+                        new_y = 0
+                    else:
+                        blocked = True
+
+                if blocked:
+                    break
+
+                target_screen = (
+                    player.screen_x + screen_dx,
+                    player.screen_y + screen_dy,
+                )
+
+                target_map = (
+                    current_map
+                    if target_screen == previous_screen_coords
+                    else world.map_at(target_screen)
+                )
+
+                if not target_map[new_y][new_x]["walkable"]:
+                    break
+
+                if target_screen != previous_screen_coords:
+                    player.set_position(target_screen[0], target_screen[1], new_x, new_y)
+                else:
+                    player.x = new_x
+                    player.y = new_y
+
+                if world.biome_at(previous_screen_coords) == "winter":
+                    player.leave_footprint(previous_screen_coords, previous_tile)
+
+                current_screen_enemies = world.enemies_at((player.screen_x, player.screen_y))
+                for enemy in current_screen_enemies:
+                    if (
+                        not enemy.defeated
+                        and player.x == enemy.x
+                        and player.y == enemy.y
+                    ):
+                        current_battle = Battle(player, enemy, previous_state)
+                        inventory_open = False
                         break
+                break
+
 
 if __name__ == "__main__":
     main()
