@@ -7,7 +7,7 @@ from typing import Dict, Iterable
 
 from data.characters import CHARACTERS
 from data.enemies import ENEMIES
-from data.tiles import get_biome_tiles
+from data.tiles import BiomeDefinition, get_biome_definition
 from engine.battle import Enemy
 from engine.characters import Character
 from engine.constants import MAP_HEIGHT, MAP_WIDTH, WORLD_COLUMNS, WORLD_ROWS
@@ -100,15 +100,17 @@ def _enemy_id_for_biome(biome: str) -> str:
 
 
 def build_world() -> World:
-    tile_cache: Dict[str, dict] = {}
+    biome_cache: Dict[str, BiomeDefinition] = {}
     screens: Dict[tuple[int, int], WorldScreen] = {}
 
     for sy in range(WORLD_ROWS):
         for sx in range(WORLD_COLUMNS):
             biome = biome_for_row(sy)
-            palette = tile_cache.setdefault(biome, get_biome_tiles(biome))
+            biome_definition = biome_cache.setdefault(
+                biome, get_biome_definition(biome)
+            )
             coords = (sx, sy)
-            terrain = generate_map(MAP_WIDTH, MAP_HEIGHT, palette)
+            terrain = generate_map(MAP_WIDTH, MAP_HEIGHT, biome_definition)
             enemy_id = _enemy_id_for_biome(biome)
             enemy_data = ENEMIES[enemy_id]
             enemies = []
@@ -136,7 +138,7 @@ def build_world() -> World:
                 )
 
             screens[coords] = WorldScreen(
-                tiles=palette,
+                tiles=biome_definition.tiles,
                 terrain=terrain,
                 biome=biome,
                 enemies=enemies,

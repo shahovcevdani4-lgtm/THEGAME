@@ -162,7 +162,7 @@ class PygameRenderer:
             for x, tile in enumerate(row):
                 tile_name = tile.get("tile_id") or tile.get("sprite") or tile.get("char")
                 ground_name = tile.get("ground_tile")
-                ground_key = self._resolve_key(ground_name, "grass")
+                ground_key = self._resolve_key(ground_name)
                 ground_surface = self.tiles.get(ground_key, self.default_tile)
                 pos = (x * self.tile_size, y * self.tile_size)
                 self.canvas.blit(ground_surface, pos)
