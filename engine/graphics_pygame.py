@@ -37,7 +37,8 @@ class PygameRenderer:
     def __init__(self) -> None:
         pygame.init()
         pygame.font.init()
-        self.tile_size = TILE_SIZE
+        self.base_tile_size = TILE_SIZE
+        self.tile_size = self.base_tile_size * 2
         self.width = SCREEN_WIDTH * self.tile_size
         self.height = SCREEN_HEIGHT * self.tile_size
         self._display_flags = pygame.RESIZABLE
@@ -64,9 +65,7 @@ class PygameRenderer:
         for image_path in sorted(directory.glob("*.png")):
             surface = pygame.image.load(str(image_path)).convert_alpha()
             if surface.get_width() != self.tile_size or surface.get_height() != self.tile_size:
-                surface = pygame.transform.smoothscale(
-                    surface, (self.tile_size, self.tile_size)
-                )
+                surface = pygame.transform.scale(surface, (self.tile_size, self.tile_size))
             tiles[image_path.stem] = surface
         return tiles
 
@@ -92,7 +91,7 @@ class PygameRenderer:
         if scaled_width == base_width and scaled_height == base_height:
             scaled_surface = self.canvas
         else:
-            scaled_surface = pygame.transform.smoothscale(
+            scaled_surface = pygame.transform.scale(
                 self.canvas, (scaled_width, scaled_height)
             )
 
@@ -126,8 +125,10 @@ class PygameRenderer:
         self.window_size = self.display.get_size()
         self.canvas = pygame.Surface((self.width, self.height)).convert()
 
-    def tick(self, fps: int = 60) -> None:
-        self.clock.tick(fps)
+    def tick(self, fps: int = 60) -> float:
+        """Ограничивает FPS и возвращает длительность кадра в секундах."""
+
+        return self.clock.tick(fps) / 1000.0
 
     def _resolve_key(self, key: str | None, fallback: str | None = None) -> str:
         if key and key in self.tiles:
@@ -149,16 +150,16 @@ class PygameRenderer:
 
     def draw_map(
         self,
-        game_map,
+        tiles,
         player,
+        player_position,
         *,
         enemies=None,
         characters=None,
         hide_enemies: bool = False,
-        footprints: Iterable[tuple[int, int]] | None = None,
-        footprint_tile: dict | None = None,
+        footprints: Iterable[tuple[int, int, dict]] | None = None,
     ) -> None:
-        for y, row in enumerate(game_map):
+        for y, row in enumerate(tiles):
             for x, tile in enumerate(row):
                 tile_name = tile.get("tile_id") or tile.get("sprite") or tile.get("char")
                 ground_name = tile.get("ground_tile")
@@ -172,30 +173,26 @@ class PygameRenderer:
                     overlay_surface = self.tiles.get(resolved_tile_key, self.default_tile)
                     self.canvas.blit(overlay_surface, pos)
 
-        if footprints and footprint_tile:
-            footprint_name = footprint_tile.get("tile_id", "footprint")
-            footprint_surface = self._surface_for(footprint_name, "footprint")
-            for fx, fy in footprints:
+        if footprints:
+            for fx, fy, footprint_tile in footprints:
+                footprint_name = footprint_tile.get("tile_id", "footprint")
+                footprint_surface = self._surface_for(footprint_name, "footprint")
                 self.canvas.blit(
                     footprint_surface, (fx * self.tile_size, fy * self.tile_size)
                 )
 
         if enemies and not hide_enemies:
-            for enemy in enemies:
+            for enemy, ex, ey in enemies:
                 if enemy and not enemy.defeated:
                     tile_name = getattr(enemy, "tile_key", None) or "enemy"
                     surface = self._surface_for(tile_name, "enemy")
-                    self.canvas.blit(
-                        surface, (enemy.x * self.tile_size, enemy.y * self.tile_size)
-                    )
+                    self.canvas.blit(surface, (ex * self.tile_size, ey * self.tile_size))
 
         if characters:
-            for character in characters:
+            for character, cx, cy in characters:
                 tile_name = getattr(character, "tile_key", None) or "warlock"
                 surface = self._surface_for(tile_name, "warlock")
-                self.canvas.blit(
-                    surface, (character.x * self.tile_size, character.y * self.tile_size)
-                )
+                self.canvas.blit(surface, (cx * self.tile_size, cy * self.tile_size))
 
         player_key = self._resolve_key(getattr(player, "tile_key", None), "player")
         base_surface = self.tiles.get(player_key, self.default_tile)
@@ -203,7 +200,8 @@ class PygameRenderer:
             player_surface = self._flipped_surface(player_key, base_surface)
         else:
             player_surface = base_surface
-        self.canvas.blit(player_surface, (player.x * self.tile_size, player.y * self.tile_size))
+        px, py = player_position
+        self.canvas.blit(player_surface, (px * self.tile_size, py * self.tile_size))
 
     def _draw_text_panel(
         self,
