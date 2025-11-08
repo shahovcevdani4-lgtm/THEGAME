@@ -319,10 +319,16 @@ def run_pygame() -> None:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     raise SystemExit()
+                if event.type in {pygame.VIDEORESIZE, pygame.WINDOWRESIZED}:
+                    renderer.set_window_size((event.w, event.h))
+                    continue
                 if event.type != pygame.KEYDOWN:
                     continue
 
                 key = event.key
+                if key == pygame.K_F11:
+                    renderer.toggle_fullscreen()
+                    continue
                 if key == pygame.K_ESCAPE:
                     raise SystemExit()
 

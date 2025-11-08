@@ -40,8 +40,13 @@ class PygameRenderer:
         self.tile_size = TILE_SIZE
         self.width = SCREEN_WIDTH * self.tile_size
         self.height = SCREEN_HEIGHT * self.tile_size
-        self.screen = pygame.display.set_mode((self.width, self.height))
+        self._display_flags = pygame.RESIZABLE
+        self.display = pygame.display.set_mode((self.width, self.height), self._display_flags)
         pygame.display.set_caption("Sprite Roguelike — прототип")
+        self.canvas = pygame.Surface((self.width, self.height)).convert()
+        self.window_size = self.display.get_size()
+        self._saved_window_size = self.window_size
+        self.fullscreen = False
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Consolas", 18)
         self.small_font = pygame.font.SysFont("Consolas", 16)
@@ -69,10 +74,57 @@ class PygameRenderer:
         pygame.quit()
 
     def clear(self) -> None:
-        self.screen.fill((0, 0, 0))
+        self.canvas.fill((0, 0, 0))
 
     def present(self) -> None:
+        if not self.display:
+            return
+
+        target_width, target_height = self.window_size
+        if target_width <= 0 or target_height <= 0:
+            return
+
+        base_width, base_height = self.width, self.height
+        scale = min(target_width / base_width, target_height / base_height)
+        scaled_width = max(1, int(base_width * scale))
+        scaled_height = max(1, int(base_height * scale))
+
+        if scaled_width == base_width and scaled_height == base_height:
+            scaled_surface = self.canvas
+        else:
+            scaled_surface = pygame.transform.smoothscale(
+                self.canvas, (scaled_width, scaled_height)
+            )
+
+        self.display.fill((0, 0, 0))
+        offset_x = (target_width - scaled_width) // 2
+        offset_y = (target_height - scaled_height) // 2
+        self.display.blit(scaled_surface, (offset_x, offset_y))
         pygame.display.flip()
+
+    def set_window_size(self, size: tuple[int, int]) -> None:
+        if self.fullscreen:
+            return
+
+        width = max(1, size[0])
+        height = max(1, size[1])
+        self.display = pygame.display.set_mode((width, height), self._display_flags)
+        self.canvas = pygame.Surface((self.width, self.height)).convert()
+        self.window_size = self.display.get_size()
+        self._saved_window_size = self.window_size
+
+    def toggle_fullscreen(self) -> None:
+        if self.fullscreen:
+            self.display = pygame.display.set_mode(
+                self._saved_window_size, self._display_flags
+            )
+            self.fullscreen = False
+        else:
+            self._saved_window_size = self.window_size
+            self.display = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            self.fullscreen = True
+        self.window_size = self.display.get_size()
+        self.canvas = pygame.Surface((self.width, self.height)).convert()
 
     def tick(self, fps: int = 60) -> None:
         self.clock.tick(fps)
@@ -113,18 +165,18 @@ class PygameRenderer:
                 ground_key = self._resolve_key(ground_name, "grass")
                 ground_surface = self.tiles.get(ground_key, self.default_tile)
                 pos = (x * self.tile_size, y * self.tile_size)
-                self.screen.blit(ground_surface, pos)
+                self.canvas.blit(ground_surface, pos)
 
                 resolved_tile_key = self._resolve_key(tile_name, ground_key)
                 if tile_name and resolved_tile_key != ground_key:
                     overlay_surface = self.tiles.get(resolved_tile_key, self.default_tile)
-                    self.screen.blit(overlay_surface, pos)
+                    self.canvas.blit(overlay_surface, pos)
 
         if footprints and footprint_tile:
             footprint_name = footprint_tile.get("tile_id", "footprint")
             footprint_surface = self._surface_for(footprint_name, "footprint")
             for fx, fy in footprints:
-                self.screen.blit(
+                self.canvas.blit(
                     footprint_surface, (fx * self.tile_size, fy * self.tile_size)
                 )
 
@@ -133,7 +185,7 @@ class PygameRenderer:
                 if enemy and not enemy.defeated:
                     tile_name = getattr(enemy, "tile_key", None) or "enemy"
                     surface = self._surface_for(tile_name, "enemy")
-                    self.screen.blit(
+                    self.canvas.blit(
                         surface, (enemy.x * self.tile_size, enemy.y * self.tile_size)
                     )
 
@@ -141,7 +193,7 @@ class PygameRenderer:
             for character in characters:
                 tile_name = getattr(character, "tile_key", None) or "warlock"
                 surface = self._surface_for(tile_name, "warlock")
-                self.screen.blit(
+                self.canvas.blit(
                     surface, (character.x * self.tile_size, character.y * self.tile_size)
                 )
 
@@ -151,7 +203,7 @@ class PygameRenderer:
             player_surface = self._flipped_surface(player_key, base_surface)
         else:
             player_surface = base_surface
-        self.screen.blit(player_surface, (player.x * self.tile_size, player.y * self.tile_size))
+        self.canvas.blit(player_surface, (player.x * self.tile_size, player.y * self.tile_size))
 
     def _draw_text_panel(
         self,
@@ -187,7 +239,7 @@ class PygameRenderer:
             pos = (16, self.height - panel_height - 16)
         else:
             pos = ((self.width - panel_width) // 2, (self.height - panel_height) // 2)
-        self.screen.blit(panel, pos)
+        self.canvas.blit(panel, pos)
 
     def draw_battle_ui(self, battle, talents_label: str) -> None:
         bribe_cost = battle.bribe_cost()
@@ -217,7 +269,7 @@ class PygameRenderer:
     def draw_inventory(self, player, talents_label: str) -> None:
         overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 160))
-        self.screen.blit(overlay, (0, 0))
+        self.canvas.blit(overlay, (0, 0))
 
         inventory = player.inventory
         slot_size = self.tile_size
@@ -281,7 +333,7 @@ class PygameRenderer:
                 glyph_rect = glyph.get_rect(center=rect.center)
                 panel.blit(glyph, glyph_rect)
 
-        self.screen.blit(panel, (origin_x, origin_y))
+        self.canvas.blit(panel, (origin_x, origin_y))
 
         context_height = 8 + 7 * (line_height + 2)
         context = pygame.Surface((self.width, context_height), pygame.SRCALPHA)
@@ -318,7 +370,7 @@ class PygameRenderer:
             rendered = self.small_font.render(text, True, color)
             context.blit(rendered, (16, 8 + index * (line_height + 2)))
 
-        self.screen.blit(context, (0, self.height - context_height))
+        self.canvas.blit(context, (0, self.height - context_height))
 
     def show_class_menu(self, classes) -> str:
         options = [
@@ -340,7 +392,13 @@ class PygameRenderer:
                 if event.type == pygame.QUIT:
                     self.close()
                     raise SystemExit()
+                if event.type in {pygame.VIDEORESIZE, pygame.WINDOWRESIZED}:
+                    self.set_window_size((event.w, event.h))
+                    continue
                 if event.type != pygame.KEYDOWN:
+                    continue
+                if event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
                     continue
                 if event.key in (pygame.K_1, pygame.K_KP1):
                     return list(classes.keys())[0]
