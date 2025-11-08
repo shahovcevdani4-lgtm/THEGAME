@@ -254,79 +254,114 @@ class PygameRenderer:
         gap = 8
         line_height = self.small_font.get_height()
 
-        panel_width = self.width - 80
+        active_count = len(inventory.ACTIVE_SLOT_ORDER)
+        passive_cols = max(1, inventory.columns)
         passive_rows = inventory.passive_rows
+
+        active_width = (
+            active_count * slot_size + max(0, (active_count - 1) * gap)
+        )
+        passive_width = (
+            passive_cols * slot_size + max(0, (passive_cols - 1) * gap)
+        )
+        grid_width = max(active_width, passive_width)
+
+        horizontal_padding = 32
+        panel_width = grid_width + horizontal_padding * 2
+
+        section_padding = 24
+        passive_section_height = (
+            line_height
+            + 2
+            + passive_rows * (slot_size + 6)
+            + (0 if passive_rows == 0 else 6)
+        )
         panel_height = (
-            24
+            section_padding
             + line_height
             + slot_size
             + 12
-            + line_height
-            + passive_rows * (slot_size + 6)
-            + 24
+            + passive_section_height
+            + section_padding
         )
-        panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+
+        panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA).convert_alpha()
         panel.fill((25, 25, 55, 235))
+        pygame.draw.rect(panel, (90, 90, 140), panel.get_rect(), 2)
 
         origin_x = (self.width - panel_width) // 2
         origin_y = max(16, (self.height - panel_height) // 2 - 32)
 
-        label = self.font.render("Активные слоты:", True, (180, 200, 255))
-        panel.blit(label, (24, 16))
+        label = self.font.render("Активные слоты:", True, (190, 210, 255))
+        label_x = (panel_width - label.get_width()) // 2
+        panel.blit(label, (label_x, section_padding - line_height // 2))
 
-        slots_y = 16 + line_height + 4
+        active_start_x = (panel_width - active_width) // 2
+        slots_y = section_padding + line_height + 4
         for index, slot_name in enumerate(inventory.ACTIVE_SLOT_ORDER):
-            slot_char = inventory.active_slot_symbol(slot_name)
-            slot_x = 24 + index * (slot_size + gap)
+            slot_char = str(inventory.active_slot_symbol(slot_name))
+            slot_x = active_start_x + index * (slot_size + gap)
             is_selected = index == inventory.cursor_index
             is_two_handed = inventory.is_two_handed_slot(slot_name)
-            color = (90, 70, 120) if is_selected else (55, 55, 80)
-            if is_two_handed and not is_selected:
-                color = (70, 50, 90)
+            base_color = (60, 60, 95)
+            if is_two_handed:
+                base_color = (75, 55, 100)
+            color = (110, 85, 150) if is_selected else base_color
             rect = pygame.Rect(slot_x, slots_y, slot_size, slot_size)
             pygame.draw.rect(panel, color, rect)
-            pygame.draw.rect(panel, (20, 20, 30), rect, 2)
-            glyph = self.font.render(slot_char, True, (230, 230, 230))
+            border_color = (215, 195, 255) if is_selected else (25, 25, 40)
+            pygame.draw.rect(panel, border_color, rect, 2)
+            glyph = self.font.render(slot_char, True, (235, 235, 240))
             glyph_rect = glyph.get_rect(center=rect.center)
             panel.blit(glyph, glyph_rect)
 
-        passive_label_y = slots_y + slot_size + 12
-        passive_label = self.font.render("Пассивные слоты:", True, (180, 200, 255))
-        panel.blit(passive_label, (24, passive_label_y))
+        passive_label = self.font.render("Пассивные слоты:", True, (190, 210, 255))
+        passive_label_x = (panel_width - passive_label.get_width()) // 2
+        passive_label_y = slots_y + slot_size + 16
+        panel.blit(passive_label, (passive_label_x, passive_label_y))
 
-        grid_start_y = passive_label_y + line_height + 2
+        grid_start_y = passive_label_y + line_height + 4
+        passive_start_x = (panel_width - passive_width) // 2
         total_active = len(inventory.ACTIVE_SLOT_ORDER)
         for row in range(passive_rows):
             for col in range(inventory.columns):
                 slot_index = total_active + row * inventory.columns + col
                 passive_index = slot_index - total_active
-                slot_char = inventory.passive_slot_symbol(passive_index)
-                slot_x = 24 + col * (slot_size + gap)
+                slot_char = str(inventory.passive_slot_symbol(passive_index))
+                slot_x = passive_start_x + col * (slot_size + gap)
                 slot_y = grid_start_y + row * (slot_size + 6)
                 is_selected = slot_index == inventory.cursor_index
-                color = (90, 70, 120) if is_selected else (40, 40, 60)
+                base_color = (45, 45, 70)
+                color = (110, 85, 150) if is_selected else base_color
                 rect = pygame.Rect(slot_x, slot_y, slot_size, slot_size)
                 pygame.draw.rect(panel, color, rect)
-                pygame.draw.rect(panel, (20, 20, 30), rect, 2)
-                glyph = self.font.render(slot_char, True, (220, 220, 220))
+                border_color = (215, 195, 255) if is_selected else (25, 25, 40)
+                pygame.draw.rect(panel, border_color, rect, 2)
+                glyph = self.font.render(slot_char, True, (225, 225, 230))
                 glyph_rect = glyph.get_rect(center=rect.center)
                 panel.blit(glyph, glyph_rect)
 
         self.canvas.blit(panel, (origin_x, origin_y))
 
         context_lines = build_inventory_context(player, talents_label)
-        visible_lines = context_lines[:7]
+        visible_lines = context_lines[:8]
         if not visible_lines:
             visible_lines = [("", DEFAULT_TEXT_COLOR)]
-        context_height = 8 + len(visible_lines) * (line_height + 2)
-        context = pygame.Surface((self.width, context_height), pygame.SRCALPHA)
+        context_width = panel_width
+        context_height = 16 + len(visible_lines) * (line_height + 4)
+        context = (
+            pygame.Surface((context_width, context_height), pygame.SRCALPHA).convert_alpha()
+        )
         context.fill((15, 15, 35, 235))
+        pygame.draw.rect(context, (90, 90, 140), context.get_rect(), 2)
 
         for index, (text, color) in enumerate(visible_lines):
             rendered = self.small_font.render(text, True, color)
-            context.blit(rendered, (16, 8 + index * (line_height + 2)))
+            context.blit(rendered, (16, 8 + index * (line_height + 4)))
 
-        self.canvas.blit(context, (0, self.height - context_height))
+        context_x = origin_x
+        context_y = min(self.height - context_height - 16, origin_y + panel_height + 16)
+        self.canvas.blit(context, (context_x, context_y))
 
     def show_class_menu(self, classes) -> str:
         options = [

@@ -147,43 +147,6 @@ class Inventory:
         return self.active_slots.get(other) is item
 
 
-def build_inventory_context(player: "Player", talents_label: str) -> list[tuple[str, tuple[int, int, int]]]:
-    inventory = player.inventory
-    lines: list[tuple[str, tuple[int, int, int]]] = []
-
-    lines.append((f"Имя: {player.name}", (245, 245, 245)))
-    lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
-    stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
-    lines.append((stats_line, (200, 255, 200)))
-    lines.append((talents_label, (255, 215, 0)))
-    lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
-
-    selected = inventory.selected_item()
-    if selected is not None:
-        descriptor = selected.slot_type
-        if descriptor == "upper":
-            descriptor = "верхняя одежда"
-        elif descriptor == "boots":
-            descriptor = "обувь"
-        elif descriptor == "weapon":
-            descriptor = "оружие"
-        item_line = f"Выбрано: {selected.name} ({descriptor})"
-        if getattr(selected, "two_handed", False):
-            item_line += " — двуручное"
-        lines.append((item_line, (210, 230, 255)))
-        description = getattr(selected, "description", "")
-        if description:
-            for chunk in str(description).split("\n"):
-                if chunk.strip():
-                    lines.append((chunk.strip(), (190, 200, 220)))
-
-    if inventory.last_message:
-        lines.append((inventory.last_message, (255, 230, 120)))
-
-    lines.append(("Управление: WASD — выбор, E — перенос, I — закрыть", (180, 180, 200)))
-
-    return lines
-
     def move_cursor(self, dx: int, dy: int) -> None:
         """Move the selection cursor across active and passive slots."""
 
@@ -351,3 +314,41 @@ def build_inventory_context(player: "Player", talents_label: str) -> list[tuple[
 
     def passive_index_range(self) -> range:
         return range(len(self.ACTIVE_SLOT_ORDER), self.total_slots)
+
+
+def build_inventory_context(player: "Player", talents_label: str) -> list[tuple[str, tuple[int, int, int]]]:
+    inventory = player.inventory
+    lines: list[tuple[str, tuple[int, int, int]]] = []
+
+    lines.append((f"Имя: {player.name}", (245, 245, 245)))
+    lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
+    stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
+    lines.append((stats_line, (200, 255, 200)))
+    lines.append((talents_label, (255, 215, 0)))
+    lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
+
+    selected = inventory.selected_item()
+    if selected is not None:
+        descriptor = selected.slot_type
+        if descriptor == "upper":
+            descriptor = "верхняя одежда"
+        elif descriptor == "boots":
+            descriptor = "обувь"
+        elif descriptor == "weapon":
+            descriptor = "оружие"
+        item_line = f"Выбрано: {selected.name} ({descriptor})"
+        if getattr(selected, "two_handed", False):
+            item_line += " — двуручное"
+        lines.append((item_line, (210, 230, 255)))
+        description = getattr(selected, "description", "")
+        if description:
+            for chunk in str(description).split("\n"):
+                if chunk.strip():
+                    lines.append((chunk.strip(), (190, 200, 220)))
+
+    if inventory.last_message:
+        lines.append((inventory.last_message, (255, 230, 120)))
+
+    lines.append(("Управление: WASD — выбор, E — перенос, I — закрыть", (180, 180, 200)))
+
+    return lines
