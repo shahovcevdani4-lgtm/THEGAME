@@ -1,0 +1,11 @@
+"""Centralized configuration constants for map and world dimensions."""
+
+MAP_WIDTH = 40
+MAP_HEIGHT = 25
+SCREEN_WIDTH = MAP_WIDTH
+SCREEN_HEIGHT = MAP_HEIGHT
+
+WORLD_COLUMNS = 8
+WORLD_ROWS = 4
+TOTAL_SCREENS = WORLD_COLUMNS * WORLD_ROWS
+assert TOTAL_SCREENS == 32

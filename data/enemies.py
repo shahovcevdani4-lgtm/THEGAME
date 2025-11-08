@@ -16,4 +16,19 @@ ENEMIES = {
             "int": 1,
         },
     },
+    "living_snow": {
+        "name": "LIVING SNOW",
+        "char": "*",
+        "fg": (220, 240, 255),
+        "bg": (0, 0, 0),
+        "hp": 15,
+        "attack_min": 1,
+        "attack_max": 2,
+        "reward_talents": 2,
+        "stats": {
+            "str": 4,
+            "dex": 3,
+            "int": 1,
+        },
+    },
 }
