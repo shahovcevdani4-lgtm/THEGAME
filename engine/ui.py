@@ -75,6 +75,7 @@ def draw_map(
     player,
     *,
     enemies=None,
+    characters=None,
     hide_enemies=False,
     footprints=None,
     footprint_tile=None,
@@ -102,6 +103,19 @@ def draw_map(
                     console.print(
                         enemy.x, enemy.y, enemy.char, fg=enemy.fg, bg=enemy.bg
                     )
+    if characters:
+        for character in characters:
+            sprite = getattr(character, "sprite", None)
+            if sprite is not None:
+                sprite.draw(console, character.x, character.y)
+            else:
+                console.print(
+                    character.x,
+                    character.y,
+                    character.char,
+                    fg=character.fg,
+                    bg=character.bg,
+                )
     player_tile_bg = game_map[player.y][player.x]["bg"]
     console.print(
         player.x,
@@ -115,7 +129,7 @@ def show_class_menu(console, context, classes):
     lines = ["Выбери класс:", ""]
     for i, (cid, cls) in enumerate(classes.items(), start=1):
         lines.append(
-            f"[{i}] {cls['name']} (STR {cls['str']} / DEX {cls['dex']} / INT {cls['int']})"
+            f"[{i}] {cls['name']} (STR {cls['str']} / AGI {cls['agi']} / INT {cls['int']})"
         )
 
     console.clear()
@@ -254,7 +268,7 @@ def _draw_inventory_context(console, player, talents_label: str, panel_height: i
     lines: list[tuple[str, tuple[int, int, int]]] = []
     lines.append((f"Имя: {player.name}", (245, 245, 245)))
     lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
-    stats_line = f"STR {player.strength}  DEX {player.dexterity}  INT {player.intelligence}"
+    stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
     lines.append((stats_line, (200, 255, 200)))
     lines.append((talents_label, (255, 215, 0)))
     lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
