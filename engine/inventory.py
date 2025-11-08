@@ -2,7 +2,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Iterable, List, Sequence
+from typing import Iterable, List, Sequence
+
+
+ACTIVE_SLOT_ORDER: Sequence[str] = (
+    "upper",
+    "boots",
+    "weapon_main",
+    "weapon_off",
+)
+
+ACTIVE_SLOT_LABELS: dict[str, str] = {
+    "upper": "Верхняя одежда",
+    "boots": "Обувь",
+    "weapon_main": "Правая рука",
+    "weapon_off": "Левая рука",
+}
+
+WEAPON_SLOTS: Sequence[str] = ("weapon_main", "weapon_off")
 
 
 @dataclass
@@ -42,20 +59,6 @@ class Inventory:
     cursor_index: int = 0
     last_message: str = ""
 
-    ACTIVE_SLOT_ORDER: ClassVar[Sequence[str]] = (
-        "upper",
-        "boots",
-        "weapon_main",
-        "weapon_off",
-    )
-    ACTIVE_SLOT_LABELS: ClassVar[dict[str, str]] = {
-        "upper": "Верхняя одежда",
-        "boots": "Обувь",
-        "weapon_main": "Правая рука",
-        "weapon_off": "Левая рука",
-    }
-    WEAPON_SLOTS: ClassVar[Sequence[str]] = ("weapon_main", "weapon_off")
-
     def __post_init__(self) -> None:
         total_passive = self.passive_columns * self.passive_rows
         if not self.passive_slots:
@@ -77,7 +80,7 @@ class Inventory:
 
     @property
     def total_slots(self) -> int:
-        return len(self.ACTIVE_SLOT_ORDER) + self.passive_columns * self.passive_rows
+        return len(ACTIVE_SLOT_ORDER) + self.passive_columns * self.passive_rows
 
     @property
     def cursor_position(self) -> tuple[int, int]:
@@ -85,25 +88,25 @@ class Inventory:
         return col, row
 
     def is_active_index(self, index: int) -> bool:
-        return 0 <= index < len(self.ACTIVE_SLOT_ORDER)
+        return 0 <= index < len(ACTIVE_SLOT_ORDER)
 
     def selected_section(self) -> str:
         return "active" if self.is_active_index(self.cursor_index) else "passive"
 
     def slot_at(self, index: int) -> InventoryItem | None:
         if self.is_active_index(index):
-            slot_name = self.ACTIVE_SLOT_ORDER[index]
+            slot_name = ACTIVE_SLOT_ORDER[index]
             return self.active_slots.get(slot_name)
-        passive_index = index - len(self.ACTIVE_SLOT_ORDER)
+        passive_index = index - len(ACTIVE_SLOT_ORDER)
         if 0 <= passive_index < len(self.passive_slots):
             return self.passive_slots[passive_index]
         return None
 
     def slot_label(self, index: int) -> str:
         if self.is_active_index(index):
-            slot_name = self.ACTIVE_SLOT_ORDER[index]
-            return self.ACTIVE_SLOT_LABELS.get(slot_name, slot_name)
-        passive_index = index - len(self.ACTIVE_SLOT_ORDER)
+            slot_name = ACTIVE_SLOT_ORDER[index]
+            return ACTIVE_SLOT_LABELS.get(slot_name, slot_name)
+        passive_index = index - len(ACTIVE_SLOT_ORDER)
         return f"Рюкзак {passive_index + 1}"
 
     def selected_item(self) -> InventoryItem | None:
@@ -134,7 +137,7 @@ class Inventory:
     # Internal helpers
     # ------------------------------------------------------------------
     def _transfer_active_to_passive(self) -> bool:
-        slot_name = self.ACTIVE_SLOT_ORDER[self.cursor_index]
+        slot_name = ACTIVE_SLOT_ORDER[self.cursor_index]
         item = self.active_slots.get(slot_name)
         if item is None:
             self.last_message = "Слот пуст."
@@ -143,7 +146,7 @@ class Inventory:
             self.last_message = "Нет свободного места в рюкзаке."
             return False
 
-        if slot_name in self.WEAPON_SLOTS and item.two_handed:
+        if slot_name in WEAPON_SLOTS and item.two_handed:
             self._clear_weapon_item(item)
         else:
             self.active_slots[slot_name] = None
@@ -153,7 +156,7 @@ class Inventory:
         return True
 
     def _transfer_passive_to_active(self) -> bool:
-        passive_index = self.cursor_index - len(self.ACTIVE_SLOT_ORDER)
+        passive_index = self.cursor_index - len(ACTIVE_SLOT_ORDER)
         item = self.passive_slots[passive_index]
         if item is None:
             self.last_message = "Пустая ячейка."
@@ -215,11 +218,11 @@ class Inventory:
                 self._store_in_passive(existing)
             equipped_items = []
 
-        if any(self.active_slots[slot] is item for slot in self.WEAPON_SLOTS):
+        if any(self.active_slots[slot] is item for slot in WEAPON_SLOTS):
             self.last_message = "Предмет уже экипирован."
             return False
 
-        for slot_name in self.WEAPON_SLOTS:
+        for slot_name in WEAPON_SLOTS:
             if self.active_slots[slot_name] is None:
                 self.active_slots[slot_name] = item
                 return True
@@ -258,7 +261,7 @@ class Inventory:
 
     def _collect_weapon_items(self, exclude: InventoryItem | None = None) -> List[InventoryItem]:
         collected: List[InventoryItem] = []
-        for slot_name in self.WEAPON_SLOTS:
+        for slot_name in WEAPON_SLOTS:
             item = self.active_slots.get(slot_name)
             if item is None:
                 continue
@@ -269,13 +272,20 @@ class Inventory:
         return collected
 
     def _clear_weapon_item(self, item: InventoryItem) -> None:
-        for slot_name in self.WEAPON_SLOTS:
+        for slot_name in WEAPON_SLOTS:
             if self.active_slots.get(slot_name) is item:
                 self.active_slots[slot_name] = None
 
     def iter_active_slots(self) -> Iterable[tuple[str, InventoryItem | None]]:
-        for slot_name in self.ACTIVE_SLOT_ORDER:
+        for slot_name in ACTIVE_SLOT_ORDER:
             yield slot_name, self.active_slots.get(slot_name)
 
     def passive_index_range(self) -> range:
-        return range(len(self.ACTIVE_SLOT_ORDER), self.total_slots)
+        return range(len(ACTIVE_SLOT_ORDER), self.total_slots)
+
+
+# Preserve legacy attribute-style access for other modules without
+# reintroducing dataclass field defaults.
+Inventory.ACTIVE_SLOT_ORDER = ACTIVE_SLOT_ORDER
+Inventory.ACTIVE_SLOT_LABELS = ACTIVE_SLOT_LABELS
+Inventory.WEAPON_SLOTS = WEAPON_SLOTS
