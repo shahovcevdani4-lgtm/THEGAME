@@ -33,6 +33,7 @@ class Player:
         self._footprints: dict[tuple[int, int], list[tuple[int, int]]] = {}
         self.inventory = Inventory()
         self._seed_starting_items()
+        self.facing = 1
 
     @property
     def strength(self) -> int:
@@ -62,6 +63,12 @@ class Player:
         self.screen_y = screen_y
         self.x = x
         self.y = y
+
+    def update_facing(self, dx: int) -> None:
+        if dx < 0:
+            self.facing = -1
+        elif dx > 0:
+            self.facing = 1
 
     def leave_footprint(
         self,

@@ -48,7 +48,9 @@ class PygameRenderer:
         self.tiles = self._load_tiles(Path("data/tiles"))
         if not self.tiles:
             raise RuntimeError("Не удалось загрузить спрайты из data/tiles/.")
-        self.default_tile = next(iter(self.tiles.values()))
+        self.default_key = next(iter(self.tiles))
+        self.default_tile = self.tiles[self.default_key]
+        self._flip_cache: dict[str, pygame.Surface] = {}
 
     def _load_tiles(self, directory: Path) -> dict[str, pygame.Surface]:
         tiles: dict[str, pygame.Surface] = {}
@@ -75,12 +77,23 @@ class PygameRenderer:
     def tick(self, fps: int = 60) -> None:
         self.clock.tick(fps)
 
-    def _surface_for(self, key: str | None, fallback: str | None = None) -> pygame.Surface:
+    def _resolve_key(self, key: str | None, fallback: str | None = None) -> str:
         if key and key in self.tiles:
-            return self.tiles[key]
+            return key
         if fallback and fallback in self.tiles:
-            return self.tiles[fallback]
-        return self.default_tile
+            return fallback
+        return self.default_key
+
+    def _surface_for(self, key: str | None, fallback: str | None = None) -> pygame.Surface:
+        resolved = self._resolve_key(key, fallback)
+        return self.tiles.get(resolved, self.default_tile)
+
+    def _flipped_surface(self, key: str, surface: pygame.Surface) -> pygame.Surface:
+        cached = self._flip_cache.get(key)
+        if cached is None:
+            cached = pygame.transform.flip(surface, True, False)
+            self._flip_cache[key] = cached
+        return cached
 
     def draw_map(
         self,
@@ -96,8 +109,16 @@ class PygameRenderer:
         for y, row in enumerate(game_map):
             for x, tile in enumerate(row):
                 tile_name = tile.get("tile_id") or tile.get("sprite") or tile.get("char")
-                surface = self._surface_for(tile_name, "grass")
-                self.screen.blit(surface, (x * self.tile_size, y * self.tile_size))
+                ground_name = tile.get("ground_tile")
+                ground_key = self._resolve_key(ground_name, "grass")
+                ground_surface = self.tiles.get(ground_key, self.default_tile)
+                pos = (x * self.tile_size, y * self.tile_size)
+                self.screen.blit(ground_surface, pos)
+
+                resolved_tile_key = self._resolve_key(tile_name, ground_key)
+                if tile_name and resolved_tile_key != ground_key:
+                    overlay_surface = self.tiles.get(resolved_tile_key, self.default_tile)
+                    self.screen.blit(overlay_surface, pos)
 
         if footprints and footprint_tile:
             footprint_name = footprint_tile.get("tile_id", "footprint")
@@ -124,7 +145,12 @@ class PygameRenderer:
                     surface, (character.x * self.tile_size, character.y * self.tile_size)
                 )
 
-        player_surface = self._surface_for(getattr(player, "tile_key", None), "player")
+        player_key = self._resolve_key(getattr(player, "tile_key", None), "player")
+        base_surface = self.tiles.get(player_key, self.default_tile)
+        if getattr(player, "facing", 1) < 0:
+            player_surface = self._flipped_surface(player_key, base_surface)
+        else:
+            player_surface = base_surface
         self.screen.blit(player_surface, (player.x * self.tile_size, player.y * self.tile_size))
 
     def _draw_text_panel(

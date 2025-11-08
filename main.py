@@ -237,6 +237,9 @@ def run_ascii() -> None:
                 if not target_map[new_y][new_x]["walkable"]:
                     break
 
+                if dx:
+                    player.update_facing(dx)
+
                 if target_screen != previous_screen_coords:
                     player.set_position(target_screen[0], target_screen[1], new_x, new_y)
                 else:
@@ -465,6 +468,9 @@ def run_pygame() -> None:
 
                 if not target_map[new_y][new_x]["walkable"]:
                     break
+
+                if dx:
+                    player.update_facing(dx)
 
                 if target_screen != previous_screen_coords:
                     player.set_position(target_screen[0], target_screen[1], new_x, new_y)
