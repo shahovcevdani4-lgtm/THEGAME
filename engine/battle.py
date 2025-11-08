@@ -62,6 +62,7 @@ class Battle:
         self.log: List[str] = [f"Вы вступили в бой с {enemy.name}!"]
         self.finished = False
         self.result: Optional[str] = None
+        self._run_attempt_locked = False
 
     def _append_log(self, message: str) -> None:
         self.log.append(message)
@@ -75,6 +76,10 @@ class Battle:
         )
 
     def run_away(self) -> bool:
+        if self._run_attempt_locked:
+            self._append_log("Вы уже пытались бежать — теперь только бой!")
+            return False
+
         if not self.can_run():
             self._append_log("Слишком страшно бежать!")
             return False
@@ -93,6 +98,7 @@ class Battle:
         self._append_log(
             f"Побег не удался (бросок {roll} + бонус {bonus} = {total})"
         )
+        self._run_attempt_locked = True
         self.enemy_attack()
         return False
 
@@ -109,8 +115,11 @@ class Battle:
             return False
 
         self.player.talents = max(0, self.player.talents - cost)
-        self._append_log(f"Вы заплатили {cost} талантов. Враг отступает.")
-        self.enemy.defeated = True
+        self._append_log(
+            f"Вы заплатили {cost} талантов. Противник принимает золото, но остаётся поблизости."
+        )
+        self.enemy.defeated = False
+        self.enemy.hp = self.enemy.max_hp
         self.finished = True
         self.result = "bribe"
         return True

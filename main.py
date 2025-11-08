@@ -52,6 +52,8 @@ def main():
             spawn_x,
             spawn_y,
             stats=chosen_class,
+            name="Герой",
+            character_class=chosen_class["name"],
             screen_x=spawn_screen[0],
             screen_y=spawn_screen[1],
         )
@@ -76,17 +78,12 @@ def main():
                 footprint_tile=footprint_tile,
             )
 
-            info = (
-                f"{chosen_class['name']} | STR {player.strength}  DEX {player.dexterity}  INT {player.intelligence}"
-            )
-            console.print(0, 0, info)
-
             talents_label = f"Золотые таланты: {player.talents}"
 
             if current_battle:
                 draw_battle_ui(console, current_battle, talents_label)
             elif inventory_open:
-                draw_inventory(console, player.inventory, talents_label)
+                draw_inventory(console, player, talents_label)
 
             context.present(console)
 
@@ -130,6 +127,14 @@ def main():
                                     prev_y,
                                 ) = current_battle.previous_state
                                 player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
+                            elif current_battle.result == "bribe":
+                                (
+                                    prev_screen_x,
+                                    prev_screen_y,
+                                    prev_x,
+                                    prev_y,
+                                ) = current_battle.previous_state
+                                player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
                             else:
                                 if current_battle.enemy in screen_enemies:
                                     screen_enemies.remove(current_battle.enemy)
@@ -139,6 +144,7 @@ def main():
                 if inventory_open:
                     if event.sym in (KeySym.I, KeySym.i):
                         inventory_open = False
+                        player.inventory.clear_message()
                     elif event.sym in (KeySym.W, KeySym.w):
                         player.inventory.move_cursor(0, -1)
                     elif event.sym in (KeySym.S, KeySym.s):
@@ -147,10 +153,13 @@ def main():
                         player.inventory.move_cursor(-1, 0)
                     elif event.sym in (KeySym.D, KeySym.d):
                         player.inventory.move_cursor(1, 0)
+                    elif event.sym in (KeySym.E, KeySym.e):
+                        player.inventory.transfer_selected()
                     break
 
                 if event.sym in (KeySym.I, KeySym.i):
                     inventory_open = True
+                    player.inventory.clear_message()
                     break
 
                 dx = 0

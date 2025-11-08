@@ -160,21 +160,40 @@ def draw_battle_ui(console, battle, talents_label: str):
 def _slot_symbol(item) -> str:
     if item is None:
         return "·"
+    symbol = getattr(item, "symbol", None)
+    if callable(symbol):
+        return symbol()
     if isinstance(item, str) and len(item) == 1:
         return item
-    return "*"
+    return str(item)[0]
 
 
-def draw_inventory(console, inventory, talents_label: str) -> None:
+def _is_two_handed_slot(inventory, slot_name: str) -> bool:
+    item = inventory.active_slots.get(slot_name)
+    if not item or not getattr(item, "two_handed", False):
+        return False
+    other = "weapon_off" if slot_name == "weapon_main" else "weapon_main"
+    return inventory.active_slots.get(other) is item
+
+
+def draw_inventory(console, player, talents_label: str) -> None:
+    inventory = player.inventory
+
     padding = 1
     slot_width = 3
     horizontal_gap = 1
-    grid_width = inventory.columns * slot_width + (inventory.columns - 1) * horizontal_gap
+    columns = inventory.columns
+    grid_width = columns * slot_width + (columns - 1) * horizontal_gap
+
+    content_lines = 4 + inventory.passive_rows
     frame_width = grid_width + 2 * padding + 2
-    frame_height = inventory.rows + 2 * padding + 4
+    frame_height = content_lines + 2 * padding + 2
+
+    panel_height = max(4, console.height // 5)
+    available_height = console.height - panel_height
 
     start_x = max(0, (console.width - frame_width) // 2)
-    start_y = max(0, (console.height - frame_height) // 2)
+    start_y = max(0, (available_height - frame_height) // 2)
 
     console.draw_frame(
         start_x,
@@ -186,20 +205,79 @@ def draw_inventory(console, inventory, talents_label: str) -> None:
         clear=False,
     )
 
-    for row in range(inventory.rows):
-        for col in range(inventory.columns):
-            idx = row * inventory.columns + col
-            slot_char = _slot_symbol(inventory.slot_at(idx))
-            slot_x = start_x + padding + 1 + col * (slot_width + horizontal_gap)
-            slot_y = start_y + padding + 1 + row
-            bg = (70, 70, 120) if idx == inventory.cursor_index else (40, 40, 60)
-            console.print(slot_x, slot_y, f"[{slot_char}]", fg=(230, 230, 230), bg=bg)
+    text_x = start_x + padding + 1
+    text_y = start_y + padding + 1
+    console.print(text_x, text_y, "Активные слоты:", fg=(180, 200, 255), bg=(20, 20, 20))
 
-    talents_y = start_y + padding + 1 + inventory.rows + 1
-    console.print(
-        start_x + padding + 1,
-        talents_y,
-        talents_label,
-        fg=(255, 215, 0),
-        bg=(20, 20, 20),
+    slot_base_y = text_y + 1
+    for index, slot_name in enumerate(inventory.ACTIVE_SLOT_ORDER):
+        slot_char = _slot_symbol(inventory.active_slots.get(slot_name))
+        slot_x = text_x + index * (slot_width + horizontal_gap)
+        slot_index = index
+        is_selected = slot_index == inventory.cursor_index
+        is_two_handed = _is_two_handed_slot(inventory, slot_name)
+        bg = (90, 70, 120) if is_selected else (55, 55, 80)
+        if is_two_handed and not is_selected:
+            bg = (70, 50, 90)
+        console.print(slot_x, slot_base_y, f"[{slot_char}]", fg=(230, 230, 230), bg=bg)
+
+    passive_label_y = slot_base_y + 2
+    console.print(text_x, passive_label_y, "Пассивные слоты:", fg=(180, 200, 255), bg=(20, 20, 20))
+
+    grid_start_y = passive_label_y + 1
+    for row in range(inventory.passive_rows):
+        for col in range(columns):
+            slot_index = len(inventory.ACTIVE_SLOT_ORDER) + row * columns + col
+            slot_char = _slot_symbol(inventory.slot_at(slot_index))
+            slot_x = text_x + col * (slot_width + horizontal_gap)
+            slot_y = grid_start_y + row
+            is_selected = slot_index == inventory.cursor_index
+            bg = (90, 70, 120) if is_selected else (40, 40, 60)
+            console.print(slot_x, slot_y, f"[{slot_char}]", fg=(220, 220, 220), bg=bg)
+
+    _draw_inventory_context(console, player, talents_label, panel_height)
+
+
+def _draw_inventory_context(console, player, talents_label: str, panel_height: int) -> None:
+    inventory = player.inventory
+    start_y = console.height - panel_height
+    console.draw_rect(
+        0,
+        start_y,
+        console.width,
+        panel_height,
+        ch=32,
+        fg=(180, 180, 200),
+        bg=(15, 15, 35),
     )
+
+    lines: list[tuple[str, tuple[int, int, int]]] = []
+    lines.append((f"Имя: {player.name}", (245, 245, 245)))
+    lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
+    stats_line = f"STR {player.strength}  DEX {player.dexterity}  INT {player.intelligence}"
+    lines.append((stats_line, (200, 255, 200)))
+    lines.append((talents_label, (255, 215, 0)))
+    lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
+
+    selected = inventory.selected_item()
+    if selected is not None:
+        descriptor = selected.slot_type
+        if descriptor == "upper":
+            descriptor = "верхняя одежда"
+        elif descriptor == "boots":
+            descriptor = "обувь"
+        elif descriptor == "weapon":
+            descriptor = "оружие"
+        item_line = f"Выбрано: {selected.name} ({descriptor})"
+        if getattr(selected, "two_handed", False):
+            item_line += " — двуручное"
+        lines.append((item_line, (210, 230, 255)))
+
+    if inventory.last_message:
+        lines.append((inventory.last_message, (255, 230, 120)))
+
+    lines.append(("Управление: WASD — выбор, E — перенос, I — закрыть", (180, 180, 200)))
+
+    max_lines = panel_height - 1
+    for offset, (text, color) in enumerate(lines[:max_lines]):
+        console.print(2, start_y + offset + 1, text, fg=color, bg=(15, 15, 35))
