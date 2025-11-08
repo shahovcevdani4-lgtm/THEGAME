@@ -66,9 +66,9 @@ class Player:
 
     def update_facing(self, dx: int) -> None:
         if dx < 0:
-            self.facing = -1
-        elif dx > 0:
             self.facing = 1
+        elif dx > 0:
+            self.facing = -1
 
     def leave_footprint(
         self,
