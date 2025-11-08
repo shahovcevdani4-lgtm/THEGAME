@@ -46,6 +46,12 @@ class World:
     def total_height(self) -> int:
         return MAP_HEIGHT * WORLD_ROWS
 
+    def total_width(self) -> int:
+        return MAP_WIDTH * WORLD_COLUMNS
+
+    def total_height(self) -> int:
+        return MAP_HEIGHT * WORLD_ROWS
+
     def get_screen(self, coords: tuple[int, int]) -> WorldScreen:
         return self.screens[coords]
 
