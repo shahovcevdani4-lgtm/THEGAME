@@ -21,24 +21,32 @@ BASE_TILES = {
         "fg": GRASS_GREEN,
         "bg": DARK_GREEN,
         "walkable": True,
+        "tile_id": "grass",
+        "ground_tile": "grass",
     },
     "tree": {
         "char": "/",  # дерево
         "fg": TREE_GREEN,
         "bg": DARK_GREEN,
         "walkable": False,
+        "tile_id": "tree",
+        "ground_tile": "grass",
     },
     "stone": {
         "char": "o",  # камень
         "fg": STONE_GRAY,
         "bg": DARK_GREEN,
         "walkable": False,
+        "tile_id": "stone",
+        "ground_tile": "grass",
     },
     "player": {
         "char": "@",
         "fg": PLAYER_GOLD,
         "bg": DARK_GREEN,
         "walkable": True,
+        "tile_id": "player",
+        "ground_tile": "grass",
     },
 }
 
@@ -60,6 +68,7 @@ BIOME_OVERRIDES = {
                 "fg": (200, 200, 230),
                 "bg": SNOW_WHITE,
                 "walkable": True,
+                "tile_id": "footprint",
             }
         },
     },
@@ -81,10 +90,13 @@ def get_biome_tiles(biome: str):
         tile = base.copy()
         if name in overrides:
             tile.update(overrides[name])
+        tile.setdefault("ground_tile", "grass")
         tiles[name] = tile
 
     for extra_name, data in overrides.get("_extra", {}).items():
-        tiles[extra_name] = data.copy()
+        tile = data.copy()
+        tile.setdefault("ground_tile", "grass")
+        tiles[extra_name] = tile
 
     return tiles
 
