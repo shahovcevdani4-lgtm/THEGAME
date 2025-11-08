@@ -7,30 +7,10 @@ from typing import Iterable, Sequence
 import pygame
 
 from engine.constants import SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
+from engine.inventory import build_inventory_context
 
 
 DEFAULT_TEXT_COLOR = (240, 240, 240)
-
-
-def _slot_symbol(item) -> str:
-    if item is None:
-        return "·"
-    symbol = getattr(item, "symbol", None)
-    if callable(symbol):
-        return symbol()
-    if isinstance(item, str) and len(item) == 1:
-        return item
-    return str(item)[0]
-
-
-def _is_two_handed_slot(inventory, slot_name: str) -> bool:
-    item = inventory.active_slots.get(slot_name)
-    if not item or not getattr(item, "two_handed", False):
-        return False
-    other = "weapon_off" if slot_name == "weapon_main" else "weapon_main"
-    return inventory.active_slots.get(other) is item
-
-
 class PygameRenderer:
     """Small helper responsible for loading tiles and drawing the UI."""
 
@@ -296,10 +276,10 @@ class PygameRenderer:
 
         slots_y = 16 + line_height + 4
         for index, slot_name in enumerate(inventory.ACTIVE_SLOT_ORDER):
-            slot_char = _slot_symbol(inventory.active_slots.get(slot_name))
+            slot_char = inventory.active_slot_symbol(slot_name)
             slot_x = 24 + index * (slot_size + gap)
             is_selected = index == inventory.cursor_index
-            is_two_handed = _is_two_handed_slot(inventory, slot_name)
+            is_two_handed = inventory.is_two_handed_slot(slot_name)
             color = (90, 70, 120) if is_selected else (55, 55, 80)
             if is_two_handed and not is_selected:
                 color = (70, 50, 90)
@@ -319,7 +299,8 @@ class PygameRenderer:
         for row in range(passive_rows):
             for col in range(inventory.columns):
                 slot_index = total_active + row * inventory.columns + col
-                slot_char = _slot_symbol(inventory.slot_at(slot_index))
+                passive_index = slot_index - total_active
+                slot_char = inventory.passive_slot_symbol(passive_index)
                 slot_x = 24 + col * (slot_size + gap)
                 slot_y = grid_start_y + row * (slot_size + 6)
                 is_selected = slot_index == inventory.cursor_index
@@ -333,38 +314,15 @@ class PygameRenderer:
 
         self.canvas.blit(panel, (origin_x, origin_y))
 
-        context_height = 8 + 7 * (line_height + 2)
+        context_lines = build_inventory_context(player, talents_label)
+        visible_lines = context_lines[:7]
+        if not visible_lines:
+            visible_lines = [("", DEFAULT_TEXT_COLOR)]
+        context_height = 8 + len(visible_lines) * (line_height + 2)
         context = pygame.Surface((self.width, context_height), pygame.SRCALPHA)
         context.fill((15, 15, 35, 235))
 
-        lines: list[tuple[str, tuple[int, int, int]]] = []
-        lines.append((f"Имя: {player.name}", (245, 245, 245)))
-        lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
-        stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
-        lines.append((stats_line, (200, 255, 200)))
-        lines.append((talents_label, (255, 215, 0)))
-        lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
-
-        selected = inventory.selected_item()
-        if selected is not None:
-            descriptor = selected.slot_type
-            if descriptor == "upper":
-                descriptor = "верхняя одежда"
-            elif descriptor == "boots":
-                descriptor = "обувь"
-            elif descriptor == "weapon":
-                descriptor = "оружие"
-            item_line = f"Выбрано: {selected.name} ({descriptor})"
-            if getattr(selected, "two_handed", False):
-                item_line += " — двуручное"
-            lines.append((item_line, (210, 230, 255)))
-
-        if inventory.last_message:
-            lines.append((inventory.last_message, (255, 230, 120)))
-
-        lines.append(("Управление: WASD — выбор, E — перенос, I — закрыть", (180, 180, 200)))
-
-        for index, (text, color) in enumerate(lines[:7]):
+        for index, (text, color) in enumerate(visible_lines):
             rendered = self.small_font.render(text, True, color)
             context.blit(rendered, (16, 8 + index * (line_height + 2)))
 

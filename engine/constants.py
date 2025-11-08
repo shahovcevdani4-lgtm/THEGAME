@@ -19,6 +19,9 @@ WORLD_ROWS = 50
 TOTAL_SCREENS = WORLD_COLUMNS * WORLD_ROWS
 assert TOTAL_SCREENS == 2500
 
+# Количество экранов, на протяжении которых биомы плавно смешиваются.
+BIOME_TRANSITION_SCREENS = 4
+
 # Параметры передвижения.
 BASE_MOVEMENT_SPEED = 3.0  # клеток в секунду
 AGILITY_SPEED_BONUS = 0.35  # дополнительная скорость за каждую единицу ловкости

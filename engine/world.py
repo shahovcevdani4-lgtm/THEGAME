@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, TYPE_CHECKING
+from typing import Dict, Iterable, Iterator, Mapping, TYPE_CHECKING
 
 from data.characters import CHARACTERS
 from data.enemies import ENEMIES
@@ -11,6 +11,7 @@ from data.tiles import BiomeDefinition, get_biome_definition
 from engine.battle import Enemy
 from engine.characters import Character
 from engine.constants import (
+    BIOME_TRANSITION_SCREENS,
     MAP_HEIGHT,
     MAP_WIDTH,
     SCREEN_HEIGHT,
@@ -29,6 +30,7 @@ class WorldScreen:
     tiles: dict
     terrain: list[list[dict]]
     biome: str
+    biome_weights: Mapping[str, float]
     enemies: list[Enemy]
     characters: list[Character]
 
@@ -39,12 +41,6 @@ class World:
     spawn_screen: tuple[int, int]
     spawn_position: tuple[int, int]
     time_elapsed: float = 0.0
-
-    def total_width(self) -> int:
-        return MAP_WIDTH * WORLD_COLUMNS
-
-    def total_height(self) -> int:
-        return MAP_HEIGHT * WORLD_ROWS
 
     def total_width(self) -> int:
         return MAP_WIDTH * WORLD_COLUMNS
@@ -183,15 +179,41 @@ class ViewportData:
     footprints: list[tuple[int, int, dict]]
 
 
-def biome_for_row(row_index: int) -> str:
-    top_threshold = WORLD_ROWS / 3
-    bottom_threshold = (2 * WORLD_ROWS) / 3
+def _smoothstep(edge0: float, edge1: float, value: float) -> float:
+    if edge0 == edge1:
+        return 1.0 if value >= edge1 else 0.0
+    t = max(0.0, min(1.0, (value - edge0) / (edge1 - edge0)))
+    return t * t * (3.0 - 2.0 * t)
 
-    if row_index < top_threshold:
-        return "winter"
-    if row_index < bottom_threshold:
-        return "summer"
-    return "drought"
+
+def _normalized_height(tile_y: int, total_tiles: int) -> float:
+    if total_tiles <= 1:
+        return 0.0
+    return tile_y / (total_tiles - 1)
+
+
+def _biome_weights_for_height(normalized_y: float) -> Dict[str, float]:
+    winter_limit = 1.0 / 3.0
+    summer_limit = 2.0 / 3.0
+    transition_span = max(1, BIOME_TRANSITION_SCREENS)
+    half_band = (transition_span / WORLD_ROWS) / 2.0
+
+    winter_falloff = _smoothstep(winter_limit - half_band, winter_limit + half_band, normalized_y)
+    drought_rise = _smoothstep(summer_limit - half_band, summer_limit + half_band, normalized_y)
+
+    winter_weight = max(0.0, 1.0 - winter_falloff)
+    drought_weight = max(0.0, drought_rise)
+    summer_weight = max(0.0, 1.0 - winter_weight - drought_weight)
+
+    total = winter_weight + summer_weight + drought_weight
+    if total <= 0:
+        return {"summer": 1.0}
+
+    return {
+        "winter": winter_weight / total,
+        "summer": summer_weight / total,
+        "drought": drought_weight / total,
+    }
 
 
 def find_spawn(game_map: Iterable[Iterable[dict]]) -> tuple[int, int]:
@@ -237,15 +259,65 @@ def _enemy_id_for_biome(biome: str) -> str:
 def build_world() -> World:
     biome_cache: Dict[str, BiomeDefinition] = {}
     screens: Dict[tuple[int, int], WorldScreen] = {}
+    total_tiles = WORLD_ROWS * MAP_HEIGHT
 
     for sy in range(WORLD_ROWS):
         for sx in range(WORLD_COLUMNS):
-            biome = biome_for_row(sy)
-            biome_definition = biome_cache.setdefault(
-                biome, get_biome_definition(biome)
-            )
+            centre_tile_y = sy * MAP_HEIGHT + MAP_HEIGHT // 2
+            centre_normalized = _normalized_height(centre_tile_y, total_tiles)
+            biome_weights = _biome_weights_for_height(centre_normalized)
+            biome = max(biome_weights, key=biome_weights.get)
+
+            relevant_biomes = [name for name, weight in biome_weights.items() if weight > 0.01]
+            if not relevant_biomes:
+                relevant_biomes = [biome]
+            biome_definitions: Dict[str, BiomeDefinition] = {}
+            for name in relevant_biomes:
+                biome_definitions[name] = biome_cache.setdefault(
+                    name, get_biome_definition(name)
+                )
+
+            terrain_options: Dict[str, list[list[dict]]] = {}
+            for name, definition in biome_definitions.items():
+                terrain_options[name] = generate_map(MAP_WIDTH, MAP_HEIGHT, definition)
+
+            combined_tiles: dict[str, dict] = {}
+            for definition in biome_definitions.values():
+                combined_tiles.update(definition.tiles)
+
+            terrain: list[list[dict]] = []
+            for ty in range(MAP_HEIGHT):
+                row: list[dict] = []
+                global_y = sy * MAP_HEIGHT + ty
+                normalized = _normalized_height(global_y, total_tiles)
+                tile_weights = _biome_weights_for_height(normalized)
+                weighted_choices = [
+                    (name, tile_weights.get(name, 0.0))
+                    for name in relevant_biomes
+                    if tile_weights.get(name, 0.0) > 0.0
+                ]
+                if not weighted_choices:
+                    weighted_choices = [(biome, 1.0)]
+
+                cumulative_max = sum(weight for _, weight in weighted_choices)
+                if cumulative_max <= 0:
+                    weighted_choices = [(biome, 1.0)]
+                    cumulative_max = 1.0
+
+                for tx in range(MAP_WIDTH):
+                    roll = random.random() * cumulative_max
+                    cumulative = 0.0
+                    chosen_biome = weighted_choices[-1][0]
+                    for candidate, weight in weighted_choices:
+                        cumulative += weight
+                        if roll <= cumulative:
+                            chosen_biome = candidate
+                            break
+                    tile = terrain_options[chosen_biome][ty][tx].copy()
+                    row.append(tile)
+                terrain.append(row)
+
             coords = (sx, sy)
-            terrain = generate_map(MAP_WIDTH, MAP_HEIGHT, biome_definition)
             enemy_id = _enemy_id_for_biome(biome)
             enemy_data = ENEMIES[enemy_id]
             enemies = []
@@ -273,9 +345,10 @@ def build_world() -> World:
                 )
 
             screens[coords] = WorldScreen(
-                tiles=biome_definition.tiles,
+                tiles=combined_tiles,
                 terrain=terrain,
                 biome=biome,
+                biome_weights=biome_weights,
                 enemies=enemies,
                 characters=characters,
             )

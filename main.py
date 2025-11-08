@@ -1,6 +1,7 @@
 # main.py
 from __future__ import annotations
 
+from collections.abc import Callable
 import time
 
 import tcod
@@ -32,6 +33,42 @@ def _active_direction(order: list, mapping: dict) -> tuple[int, int] | None:
     for key in reversed(order):
         if key in mapping:
             return mapping[key]
+    return None
+
+
+def _status_label(player: Player) -> str:
+    return f"Золотые таланты: {player.talents}"
+
+
+def _finalize_battle(
+    battle: Battle | None,
+    player: Player,
+    world,
+    *,
+    on_defeat: Callable[[], None] | None = None,
+) -> Battle | None:
+    if not battle or not battle.finished:
+        return battle
+
+    if battle.result == "defeat":
+        if on_defeat is not None:
+            on_defeat()
+        raise SystemExit("Вы пали в бою.")
+
+    enemy_screen = (battle.enemy.screen_x, battle.enemy.screen_y)
+    screen_enemies = world.enemies_at(enemy_screen)
+
+    if battle.result == "run":
+        battle.enemy.hp = battle.enemy.max_hp
+        prev_screen_x, prev_screen_y, prev_x, prev_y = battle.previous_state
+        player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
+    elif battle.result == "bribe":
+        prev_screen_x, prev_screen_y, prev_x, prev_y = battle.previous_state
+        player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
+    elif battle.result == "victory":
+        if battle.enemy in screen_enemies:
+            screen_enemies.remove(battle.enemy)
+
     return None
 
 
@@ -201,37 +238,13 @@ def run_ascii() -> None:
                         current_battle.bribe()
                         handled = True
 
-                    if handled and current_battle.finished:
-                        if current_battle.result == "defeat":
-                            context.present(console)
-                            raise SystemExit("Вы пали в бою.")
-                        if current_battle.result in {"victory", "bribe", "run"}:
-                            enemy_screen = (
-                                current_battle.enemy.screen_x,
-                                current_battle.enemy.screen_y,
-                            )
-                            screen_enemies = world.enemies_at(enemy_screen)
-                            if current_battle.result == "run":
-                                current_battle.enemy.hp = current_battle.enemy.max_hp
-                                (
-                                    prev_screen_x,
-                                    prev_screen_y,
-                                    prev_x,
-                                    prev_y,
-                                ) = current_battle.previous_state
-                                player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
-                            elif current_battle.result == "bribe":
-                                (
-                                    prev_screen_x,
-                                    prev_screen_y,
-                                    prev_x,
-                                    prev_y,
-                                ) = current_battle.previous_state
-                                player.set_position(prev_screen_x, prev_screen_y, prev_x, prev_y)
-                            else:
-                                if current_battle.enemy in screen_enemies:
-                                    screen_enemies.remove(current_battle.enemy)
-                        current_battle = None
+                    if handled:
+                        current_battle = _finalize_battle(
+                            current_battle,
+                            player,
+                            world,
+                            on_defeat=lambda: context.present(console),
+                        )
                     continue
 
                 if inventory_open:
@@ -306,9 +319,7 @@ def run_ascii() -> None:
                 footprints=viewport.footprints,
             )
 
-            status_label = (
-                f"Золотые таланты: {player.talents} | Время: {world.time_elapsed:05.1f}с"
-            )
+            status_label = _status_label(player)
 
             if current_battle:
                 draw_battle_ui(console, current_battle, status_label)
@@ -392,40 +403,8 @@ def run_pygame() -> None:
                         current_battle.bribe()
                         handled = True
 
-                    if handled and current_battle.finished:
-                        if current_battle.result == "defeat":
-                            raise SystemExit("Вы пали в бою.")
-                        if current_battle.result in {"victory", "bribe", "run"}:
-                            enemy_screen = (
-                                current_battle.enemy.screen_x,
-                                current_battle.enemy.screen_y,
-                            )
-                            screen_enemies = world.enemies_at(enemy_screen)
-                            if current_battle.result == "run":
-                                current_battle.enemy.hp = current_battle.enemy.max_hp
-                                (
-                                    prev_screen_x,
-                                    prev_screen_y,
-                                    prev_x,
-                                    prev_y,
-                                ) = current_battle.previous_state
-                                player.set_position(
-                                    prev_screen_x, prev_screen_y, prev_x, prev_y
-                                )
-                            elif current_battle.result == "bribe":
-                                (
-                                    prev_screen_x,
-                                    prev_screen_y,
-                                    prev_x,
-                                    prev_y,
-                                ) = current_battle.previous_state
-                                player.set_position(
-                                    prev_screen_x, prev_screen_y, prev_x, prev_y
-                                )
-                            else:
-                                if current_battle.enemy in screen_enemies:
-                                    screen_enemies.remove(current_battle.enemy)
-                        current_battle = None
+                    if handled:
+                        current_battle = _finalize_battle(current_battle, player, world)
                     continue
 
                 if inventory_open:
@@ -499,9 +478,7 @@ def run_pygame() -> None:
                 footprints=viewport.footprints,
             )
 
-            status_label = (
-                f"Золотые таланты: {player.talents} | Время: {world.time_elapsed:05.1f}с"
-            )
+            status_label = _status_label(player)
 
             if current_battle:
                 renderer.draw_battle_ui(current_battle, status_label)
