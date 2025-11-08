@@ -35,15 +35,15 @@ class Enemy:
         return self.stats.get("str", 0)
 
     @property
-    def dexterity(self) -> int:
-        return self.stats.get("dex", 0)
+    def agility(self) -> int:
+        return self.stats.get("agi", 0)
 
     @property
     def intelligence(self) -> int:
         return self.stats.get("int", 0)
 
     def average_power(self) -> float:
-        return (self.strength + self.dexterity + self.intelligence) / 3
+        return (self.strength + self.agility + self.intelligence) / 3
 
     def attack_damage(self) -> int:
         return random.randint(self.attack_min, self.attack_max)
@@ -69,9 +69,9 @@ class Battle:
         self.log = self.log[-6:]
 
     def can_run(self) -> bool:
-        threshold = (self.enemy.dexterity + self.enemy.intelligence) / 2
+        threshold = (self.enemy.agility + self.enemy.intelligence) / 2
         return (
-            self.player.dexterity >= threshold
+            self.player.agility >= threshold
             or self.player.intelligence >= threshold
         )
 
@@ -84,7 +84,7 @@ class Battle:
             self._append_log("Слишком страшно бежать!")
             return False
 
-        bonus = self.player.dexterity // 3
+        bonus = self.player.agility // 3
         roll = random.randint(1, 12)
         total = roll + bonus
         if total >= 6:

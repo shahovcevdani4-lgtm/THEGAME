@@ -5,9 +5,11 @@ import random
 from dataclasses import dataclass
 from typing import Dict, Iterable
 
+from data.characters import CHARACTERS
 from data.enemies import ENEMIES
 from data.tiles import get_biome_tiles
 from engine.battle import Enemy
+from engine.characters import Character
 from engine.constants import MAP_HEIGHT, MAP_WIDTH, WORLD_COLUMNS, WORLD_ROWS
 from engine.mapgen import generate_map
 
@@ -18,6 +20,7 @@ class WorldScreen:
     terrain: list[list[dict]]
     biome: str
     enemies: list[Enemy]
+    characters: list[Character]
 
 
 @dataclass
@@ -40,6 +43,9 @@ class World:
 
     def enemies_at(self, coords: tuple[int, int]) -> list[Enemy]:
         return self.get_screen(coords).enemies
+
+    def characters_at(self, coords: tuple[int, int]) -> list[Character]:
+        return self.get_screen(coords).characters
 
 
 def biome_for_row(row_index: int) -> str:
@@ -106,6 +112,7 @@ def build_world() -> World:
             enemy_id = _enemy_id_for_biome(biome)
             enemy_data = ENEMIES[enemy_id]
             enemies = []
+            characters: list[Character] = []
 
             ex, ey = find_random_walkable(terrain)
             if terrain[ey][ex]["walkable"]:
@@ -132,7 +139,34 @@ def build_world() -> World:
                 terrain=terrain,
                 biome=biome,
                 enemies=enemies,
+                characters=characters,
             )
+
+    warlock_data = CHARACTERS["warlock"]
+    available_screens = list(screens.keys())
+    random.shuffle(available_screens)
+    warlock_spawns = available_screens[: min(5, len(available_screens))]
+
+    for screen_coords in warlock_spawns:
+        screen = screens[screen_coords]
+        occupied = [(enemy.x, enemy.y) for enemy in screen.enemies]
+        occupied.extend((character.x, character.y) for character in screen.characters)
+        wx, wy = find_random_walkable(screen.terrain, exclude=occupied)
+        if not screen.terrain[wy][wx]["walkable"]:
+            continue
+        screen.characters.append(
+            Character(
+                name=warlock_data["name"],
+                char=warlock_data["char"],
+                fg=warlock_data["fg"],
+                bg=warlock_data["bg"],
+                stats=warlock_data["stats"],
+                x=wx,
+                y=wy,
+                screen_x=screen_coords[0],
+                screen_y=screen_coords[1],
+            )
+        )
 
     spawn_screen = (WORLD_COLUMNS // 2, WORLD_ROWS // 2)
     spawn_map = screens[spawn_screen].terrain

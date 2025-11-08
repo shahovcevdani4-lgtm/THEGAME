@@ -73,6 +73,7 @@ def main():
                 game_map,
                 player,
                 enemies=world_screen.enemies,
+                characters=world_screen.characters,
                 hide_enemies=current_battle is not None,
                 footprints=footprints,
                 footprint_tile=footprint_tile,

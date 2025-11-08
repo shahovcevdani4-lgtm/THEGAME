@@ -38,15 +38,15 @@ class Player:
         return self.stats.get("str", 0)
 
     @property
-    def dexterity(self) -> int:
-        return self.stats.get("dex", 0)
+    def agility(self) -> int:
+        return self.stats.get("agi", 0)
 
     @property
     def intelligence(self) -> int:
         return self.stats.get("int", 0)
 
     def average_power(self) -> float:
-        return (self.strength + self.dexterity + self.intelligence) / 3
+        return (self.strength + self.agility + self.intelligence) / 3
 
     def attack_damage(self) -> int:
         return random.randint(1, max(1, self.strength))
