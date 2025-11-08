@@ -1,0 +1,402 @@
+{
+  "characters": {
+    "warlock": {
+      "name": "WARLOCK",
+      "char": "§",
+      "fg": [
+        180,
+        0,
+        200
+      ],
+      "bg": [
+        20,
+        0,
+        40
+      ],
+      "tile": "warlock",
+      "stats": {
+        "str": 4,
+        "agi": 6,
+        "int": 8
+      }
+    }
+  },
+  "enemies": {
+    "stinky_forest_toad": {
+      "name": "STINKY FOREST TOAD",
+      "char": "T",
+      "fg": [
+        0,
+        170,
+        0
+      ],
+      "bg": [
+        120,
+        0,
+        40
+      ],
+      "hp": 15,
+      "attack_min": 1,
+      "attack_max": 2,
+      "reward_talents": 2,
+      "tile": "enemy",
+      "stats": {
+        "str": 4,
+        "agi": 3,
+        "int": 1
+      }
+    },
+    "living_snow": {
+      "name": "LIVING SNOW",
+      "char": "*",
+      "fg": [
+        220,
+        240,
+        255
+      ],
+      "bg": [
+        120,
+        0,
+        40
+      ],
+      "hp": 15,
+      "attack_min": 1,
+      "attack_max": 2,
+      "reward_talents": 2,
+      "tile": "enemy",
+      "stats": {
+        "str": 4,
+        "agi": 3,
+        "int": 1
+      }
+    }
+  },
+  "items": {
+    "warm_cloak": {
+      "name": "Тёплый плащ",
+      "icon": "C",
+      "slot_type": "upper",
+      "two_handed": false
+    },
+    "hiking_boots": {
+      "name": "Походные сапоги",
+      "icon": "B",
+      "slot_type": "boots",
+      "two_handed": false
+    },
+    "dagger": {
+      "name": "Кинжал",
+      "icon": "/",
+      "slot_type": "weapon_main",
+      "two_handed": false
+    },
+    "halberd": {
+      "name": "Алебарда",
+      "icon": "†",
+      "slot_type": "weapon_main",
+      "two_handed": true
+    }
+  },
+  "tiles": {
+    "common_tiles": {
+      "player": {
+        "char": "@",
+        "fg": [
+          240,
+          200,
+          80
+        ],
+        "bg": null,
+        "walkable": true,
+        "tile_id": "player"
+      },
+      "enemy": {
+        "char": "E",
+        "fg": [
+          255,
+          230,
+          230
+        ],
+        "bg": [
+          120,
+          0,
+          40
+        ],
+        "walkable": false,
+        "tile_id": "enemy"
+      },
+      "warlock": {
+        "char": "§",
+        "fg": [
+          180,
+          0,
+          200
+        ],
+        "bg": [
+          20,
+          0,
+          40
+        ],
+        "walkable": false,
+        "tile_id": "warlock"
+      }
+    },
+    "biomes": {
+      "summer": {
+        "ground_tile": "summer_ground",
+        "unique_tiles": {
+          "summer_ground": {
+            "char": ".",
+            "fg": [
+              20,
+              150,
+              40
+            ],
+            "bg": [
+              5,
+              70,
+              15
+            ],
+            "walkable": true,
+            "tile_id": "summer_ground"
+          },
+          "summer_tree": {
+            "char": "♣",
+            "fg": [
+              90,
+              200,
+              90
+            ],
+            "bg": [
+              5,
+              70,
+              15
+            ],
+            "walkable": false,
+            "tile_id": "summer_tree"
+          },
+          "summer_boulder": {
+            "char": "▲",
+            "fg": [
+              130,
+              130,
+              130
+            ],
+            "bg": [
+              5,
+              70,
+              15
+            ],
+            "walkable": false,
+            "tile_id": "summer_boulder"
+          }
+        },
+        "forest_tiles": [
+          "summer_tree"
+        ],
+        "forest_count": [
+          3,
+          6
+        ],
+        "forest_radius": [
+          2,
+          5
+        ],
+        "forest_density": 0.7,
+        "scatter_rules": [
+          {
+            "tile": "summer_boulder",
+            "count_range": [
+              12,
+              22
+            ],
+            "avoid_border": true
+          }
+        ]
+      },
+      "winter": {
+        "ground_tile": "winter_ground",
+        "unique_tiles": {
+          "winter_ground": {
+            "char": "·",
+            "fg": [
+              230,
+              230,
+              255
+            ],
+            "bg": [
+              210,
+              210,
+              235
+            ],
+            "walkable": true,
+            "tile_id": "winter_ground"
+          },
+          "winter_tree": {
+            "char": "Y",
+            "fg": [
+              30,
+              90,
+              160
+            ],
+            "bg": [
+              210,
+              210,
+              235
+            ],
+            "walkable": false,
+            "tile_id": "winter_tree"
+          },
+          "winter_snowdrift": {
+            "char": "~",
+            "fg": [
+              200,
+              200,
+              230
+            ],
+            "bg": [
+              210,
+              210,
+              235
+            ],
+            "walkable": true,
+            "tile_id": "winter_snowdrift"
+          }
+        },
+        "forest_tiles": [
+          "winter_tree"
+        ],
+        "forest_count": [
+          3,
+          6
+        ],
+        "forest_radius": [
+          2,
+          5
+        ],
+        "forest_density": 0.7,
+        "scatter_rules": [
+          {
+            "tile": "winter_snowdrift",
+            "count_range": [
+              18,
+              28
+            ],
+            "avoid_border": false
+          }
+        ],
+        "extras": {
+          "footprint": {
+            "char": "'",
+            "fg": [
+              200,
+              200,
+              230
+            ],
+            "bg": [
+              210,
+              210,
+              235
+            ],
+            "walkable": true,
+            "tile_id": "footprint"
+          }
+        }
+      },
+      "drought": {
+        "ground_tile": "drought_ground",
+        "unique_tiles": {
+          "drought_ground": {
+            "char": "`",
+            "fg": [
+              215,
+              180,
+              90
+            ],
+            "bg": [
+              170,
+              130,
+              60
+            ],
+            "walkable": true,
+            "tile_id": "drought_ground"
+          },
+          "drought_cactus": {
+            "char": "†",
+            "fg": [
+              60,
+              140,
+              70
+            ],
+            "bg": [
+              170,
+              130,
+              60
+            ],
+            "walkable": false,
+            "tile_id": "drought_cactus"
+          },
+          "drought_dead_tree": {
+            "char": "T",
+            "fg": [
+              150,
+              90,
+              40
+            ],
+            "bg": [
+              170,
+              130,
+              60
+            ],
+            "walkable": false,
+            "tile_id": "drought_dead_tree"
+          }
+        },
+        "forest_tiles": [
+          "drought_cactus",
+          "drought_dead_tree"
+        ],
+        "forest_count": [
+          3,
+          6
+        ],
+        "forest_radius": [
+          2,
+          5
+        ],
+        "forest_density": 0.6,
+        "scatter_rules": [
+          {
+            "tile": "drought_cactus",
+            "count_range": [
+              8,
+              14
+            ],
+            "avoid_border": true
+          },
+          {
+            "tile": "drought_dead_tree",
+            "count_range": [
+              6,
+              12
+            ],
+            "avoid_border": true
+          }
+        ]
+      }
+    }
+  },
+  "structures": {
+    "forest": {
+      "description": "Стандартное пятно леса",
+      "radius_range": [
+        2,
+        5
+      ],
+      "density": 0.7,
+      "tiles": [
+        "summer_tree"
+      ]
+    }
+  }
+}

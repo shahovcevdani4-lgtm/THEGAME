@@ -1,36 +1,25 @@
-# data/enemies.py
+"""Definitions for hostile creatures encountered on the map."""
+from __future__ import annotations
 
-ENEMIES = {
-    "stinky_forest_toad": {
-        "name": "STINKY FOREST TOAD",
-        "char": "T",
-        "fg": (0, 170, 0),
-        "bg": (120, 0, 40),
-        "hp": 15,
-        "attack_min": 1,
-        "attack_max": 2,
-        "reward_talents": 2,
-        "tile": "enemy",
-        "stats": {
-            "str": 4,
-            "agi": 3,
-            "int": 1,
-        },
-    },
-    "living_snow": {
-        "name": "LIVING SNOW",
-        "char": "*",
-        "fg": (220, 240, 255),
-        "bg": (120, 0, 40),
-        "hp": 15,
-        "attack_min": 1,
-        "attack_max": 2,
-        "reward_talents": 2,
-        "tile": "enemy",
-        "stats": {
-            "str": 4,
-            "agi": 3,
-            "int": 1,
-        },
-    },
-}
+from typing import Dict
+
+from data.loader import load_game_data
+
+
+def _normalise_enemy(entry: dict) -> dict:
+    normalised = dict(entry)
+    for key in ("fg", "bg"):
+        if key in normalised and normalised[key] is not None:
+            normalised[key] = tuple(normalised[key])
+    if "stats" in normalised and isinstance(normalised["stats"], dict):
+        normalised["stats"] = dict(normalised["stats"])
+    return normalised
+
+
+def _load_enemies() -> Dict[str, dict]:
+    data = load_game_data()
+    enemies = data.get("enemies", {})
+    return {name: _normalise_enemy(values) for name, values in enemies.items()}
+
+
+ENEMIES = _load_enemies()
