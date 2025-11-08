@@ -125,8 +125,10 @@ class PygameRenderer:
         self.window_size = self.display.get_size()
         self.canvas = pygame.Surface((self.width, self.height)).convert()
 
-    def tick(self, fps: int = 60) -> None:
-        self.clock.tick(fps)
+    def tick(self, fps: int = 60) -> float:
+        """Ограничивает FPS и возвращает длительность кадра в секундах."""
+
+        return self.clock.tick(fps) / 1000.0
 
     def _resolve_key(self, key: str | None, fallback: str | None = None) -> str:
         if key and key in self.tiles:

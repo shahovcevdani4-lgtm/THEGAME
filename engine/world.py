@@ -38,6 +38,13 @@ class World:
     screens: Dict[tuple[int, int], WorldScreen]
     spawn_screen: tuple[int, int]
     spawn_position: tuple[int, int]
+    time_elapsed: float = 0.0
+
+    def total_width(self) -> int:
+        return MAP_WIDTH * WORLD_COLUMNS
+
+    def total_height(self) -> int:
+        return MAP_HEIGHT * WORLD_ROWS
 
     def total_width(self) -> int:
         return MAP_WIDTH * WORLD_COLUMNS
@@ -62,6 +69,11 @@ class World:
 
     def characters_at(self, coords: tuple[int, int]) -> list[Character]:
         return self.get_screen(coords).characters
+
+    def advance_time(self, delta: float) -> None:
+        if delta <= 0:
+            return
+        self.time_elapsed += delta
 
     def _clamp_camera(self, x: int, y: int, width: int, height: int) -> tuple[int, int]:
         max_x = max(0, self.total_width() - width)
