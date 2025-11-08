@@ -2,7 +2,7 @@
 import random
 
 from data.tiles import TILES
-from engine.inventory import Inventory
+from engine.inventory import Inventory, InventoryItem
 
 
 class Player:
@@ -12,6 +12,8 @@ class Player:
         y: int,
         stats: dict,
         *,
+        name: str = "Игрок",
+        character_class: str = "",
         tile=None,
         screen_x: int = 0,
         screen_y: int = 0,
@@ -21,12 +23,15 @@ class Player:
         self.screen_x = screen_x
         self.screen_y = screen_y
         self.tile = tile or TILES["player"].copy()
+        self.name = name
+        self.character_class = character_class
         self.stats = stats
         self.max_hp = 20 + stats.get("str", 0) * 2
         self.hp = self.max_hp
         self.talents = 100
         self._footprints: dict[tuple[int, int], list[tuple[int, int]]] = {}
         self.inventory = Inventory()
+        self._seed_starting_items()
 
     @property
     def strength(self) -> int:
@@ -75,3 +80,17 @@ class Player:
 
     def clear_footprints(self, screen_coords: tuple[int, int]) -> None:
         self._footprints.pop(screen_coords, None)
+
+    def _seed_starting_items(self) -> None:
+        """Populate the backpack with a few basic items for testing equipment."""
+
+        starters = [
+            InventoryItem("Тёплый плащ", "C", "upper"),
+            InventoryItem("Походные сапоги", "B", "boots"),
+            InventoryItem("Кинжал", "/", "weapon"),
+            InventoryItem("Алебарда", "†", "weapon", two_handed=True),
+        ]
+
+        for index, item in enumerate(starters):
+            if index < len(self.inventory.passive_slots):
+                self.inventory.passive_slots[index] = item

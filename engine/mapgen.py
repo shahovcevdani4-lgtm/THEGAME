@@ -10,12 +10,14 @@ def generate_map(width: int, height: int, tiles):
     # генерация очагов леса
     num_forests = random.randint(3, 6)
     for _ in range(num_forests):
-        fx = random.randint(0, width - 1)
-        fy = random.randint(0, height - 1)
+        fx = random.randint(1, width - 2)
+        fy = random.randint(1, height - 2)
         radius = random.randint(2, 5)
 
         for y in range(max(0, fy - radius), min(height, fy + radius + 1)):
             for x in range(max(0, fx - radius), min(width, fx + radius + 1)):
+                if x in (0, width - 1) or y in (0, height - 1):
+                    continue
                 dist = ((x - fx) ** 2 + (y - fy) ** 2) ** 0.5
                 if dist < radius and random.random() < 0.7:
                     game_map[y][x] = tiles["tree"].copy()
@@ -24,6 +26,8 @@ def generate_map(width: int, height: int, tiles):
     for _ in range(random.randint(15, 25)):
         x = random.randint(0, width - 1)
         y = random.randint(0, height - 1)
+        if x in (0, width - 1) or y in (0, height - 1):
+            continue
         game_map[y][x] = tiles["stone"].copy()
 
     return game_map

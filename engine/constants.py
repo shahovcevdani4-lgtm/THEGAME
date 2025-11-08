@@ -1,7 +1,7 @@
 """Centralized configuration constants for map and world dimensions."""
 
-MAP_WIDTH = 40
-MAP_HEIGHT = 25
+MAP_WIDTH = 50
+MAP_HEIGHT = 30
 SCREEN_WIDTH = MAP_WIDTH
 SCREEN_HEIGHT = MAP_HEIGHT
 
