@@ -71,20 +71,21 @@ def draw_text_window(
 
 def draw_map(
     console,
-    game_map,
+    tiles,
     player,
+    player_position,
     *,
     enemies=None,
     characters=None,
     hide_enemies=False,
     footprints=None,
-    footprint_tile=None,
 ):
-    for y, row in enumerate(game_map):
+    for y, row in enumerate(tiles):
         for x, tile in enumerate(row):
             console.print(x, y, tile["char"], fg=tile["fg"], bg=tile["bg"])
-    if footprints and footprint_tile:
-        for fx, fy in footprints:
+
+    if footprints:
+        for fx, fy, footprint_tile in footprints:
             if 0 <= fy < console.height and 0 <= fx < console.width:
                 console.print(
                     fx,
@@ -93,33 +94,38 @@ def draw_map(
                     fg=footprint_tile["fg"],
                     bg=footprint_tile["bg"],
                 )
+
     if enemies and not hide_enemies:
-        for enemy in enemies:
-            if enemy and not enemy.defeated:
+        for enemy, ex, ey in enemies:
+            if enemy and not getattr(enemy, "defeated", False):
                 sprite = getattr(enemy, "sprite", None)
                 if sprite is not None:
-                    sprite.draw(console, enemy.x, enemy.y)
+                    sprite.draw(console, ex, ey)
                 else:
-                    console.print(
-                        enemy.x, enemy.y, enemy.char, fg=enemy.fg, bg=enemy.bg
-                    )
+                    console.print(ex, ey, enemy.char, fg=enemy.fg, bg=enemy.bg)
+
     if characters:
-        for character in characters:
+        for character, cx, cy in characters:
             sprite = getattr(character, "sprite", None)
             if sprite is not None:
-                sprite.draw(console, character.x, character.y)
+                sprite.draw(console, cx, cy)
             else:
                 console.print(
-                    character.x,
-                    character.y,
+                    cx,
+                    cy,
                     character.char,
                     fg=character.fg,
                     bg=character.bg,
                 )
-    player_tile_bg = game_map[player.y][player.x]["bg"]
+
+    px, py = player_position
+    if 0 <= py < len(tiles) and 0 <= px < len(tiles[py]):
+        player_tile_bg = tiles[py][px]["bg"]
+    else:
+        player_tile_bg = (0, 0, 0)
     console.print(
-        player.x,
-        player.y,
+        px,
+        py,
         player.tile["char"],
         fg=player.tile["fg"],
         bg=player_tile_bg,

@@ -67,19 +67,16 @@ def run_ascii() -> None:
         while True:
             console.clear()
             current_screen = (player.screen_x, player.screen_y)
-            world_screen = world.get_screen(current_screen)
-            game_map = world_screen.terrain
-            footprints = player.get_footprints(current_screen)
-            footprint_tile = world_screen.tiles.get("footprint")
+            viewport = world.build_viewport(player)
             draw_map(
                 console,
-                game_map,
+                viewport.tiles,
                 player,
-                enemies=world_screen.enemies,
-                characters=world_screen.characters,
+                viewport.player_position,
+                enemies=viewport.enemies,
+                characters=viewport.characters,
                 hide_enemies=current_battle is not None,
-                footprints=footprints,
-                footprint_tile=footprint_tile,
+                footprints=viewport.footprints,
             )
 
             talents_label = f"Золотые таланты: {player.talents}"
@@ -291,18 +288,15 @@ def run_pygame() -> None:
         while True:
             renderer.clear()
             current_screen = (player.screen_x, player.screen_y)
-            world_screen = world.get_screen(current_screen)
-            game_map = world_screen.terrain
-            footprints = player.get_footprints(current_screen)
-            footprint_tile = world_screen.tiles.get("footprint")
+            viewport = world.build_viewport(player)
             renderer.draw_map(
-                game_map,
+                viewport.tiles,
                 player,
-                enemies=world_screen.enemies,
-                characters=world_screen.characters,
+                viewport.player_position,
+                enemies=viewport.enemies,
+                characters=viewport.characters,
                 hide_enemies=current_battle is not None,
-                footprints=footprints,
-                footprint_tile=footprint_tile,
+                footprints=viewport.footprints,
             )
 
             talents_label = f"Золотые таланты: {player.talents}"

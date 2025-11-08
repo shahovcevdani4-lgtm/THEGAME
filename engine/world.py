@@ -3,15 +3,25 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Iterator, TYPE_CHECKING
 
 from data.characters import CHARACTERS
 from data.enemies import ENEMIES
 from data.tiles import BiomeDefinition, get_biome_definition
 from engine.battle import Enemy
 from engine.characters import Character
-from engine.constants import MAP_HEIGHT, MAP_WIDTH, WORLD_COLUMNS, WORLD_ROWS
+from engine.constants import (
+    MAP_HEIGHT,
+    MAP_WIDTH,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    WORLD_COLUMNS,
+    WORLD_ROWS,
+)
 from engine.mapgen import generate_map
+
+if TYPE_CHECKING:  # pragma: no cover - runtime import cycle guard
+    from engine.player import Player
 
 
 @dataclass
@@ -28,6 +38,12 @@ class World:
     screens: Dict[tuple[int, int], WorldScreen]
     spawn_screen: tuple[int, int]
     spawn_position: tuple[int, int]
+
+    def total_width(self) -> int:
+        return MAP_WIDTH * WORLD_COLUMNS
+
+    def total_height(self) -> int:
+        return MAP_HEIGHT * WORLD_ROWS
 
     def get_screen(self, coords: tuple[int, int]) -> WorldScreen:
         return self.screens[coords]
@@ -46,6 +62,113 @@ class World:
 
     def characters_at(self, coords: tuple[int, int]) -> list[Character]:
         return self.get_screen(coords).characters
+
+    def _clamp_camera(self, x: int, y: int, width: int, height: int) -> tuple[int, int]:
+        max_x = max(0, self.total_width() - width)
+        max_y = max(0, self.total_height() - height)
+        return max(0, min(x, max_x)), max(0, min(y, max_y))
+
+    def _screens_in_rect(
+        self, start_x: int, start_y: int, width: int, height: int
+    ) -> Iterator[tuple[int, int]]:
+        if width <= 0 or height <= 0:
+            return iter(())
+
+        end_x = min(self.total_width(), start_x + width)
+        end_y = min(self.total_height(), start_y + height)
+        left = start_x // MAP_WIDTH
+        right = (end_x - 1) // MAP_WIDTH
+        top = start_y // MAP_HEIGHT
+        bottom = (end_y - 1) // MAP_HEIGHT
+
+        return (
+            (sx, sy)
+            for sy in range(top, bottom + 1)
+            for sx in range(left, right + 1)
+        )
+
+    def build_viewport(
+        self,
+        player: "Player",
+        *,
+        width: int = SCREEN_WIDTH,
+        height: int = SCREEN_HEIGHT,
+    ) -> "ViewportData":
+        world_x = player.screen_x * MAP_WIDTH + player.x
+        world_y = player.screen_y * MAP_HEIGHT + player.y
+        camera_x = world_x - width // 2
+        camera_y = world_y - height // 2
+        camera_x, camera_y = self._clamp_camera(camera_x, camera_y, width, height)
+
+        tiles: list[list[dict]] = []
+        for local_y in range(height):
+            row: list[dict] = []
+            world_y_coord = camera_y + local_y
+            screen_y = world_y_coord // MAP_HEIGHT
+            tile_y = world_y_coord % MAP_HEIGHT
+            for local_x in range(width):
+                world_x_coord = camera_x + local_x
+                screen_x = world_x_coord // MAP_WIDTH
+                tile_x = world_x_coord % MAP_WIDTH
+                screen = self.screens[(screen_x, screen_y)]
+                row.append(screen.terrain[tile_y][tile_x])
+            tiles.append(row)
+
+        footprints: list[tuple[int, int, dict]] = []
+        enemies: list[tuple[Enemy, int, int]] = []
+        characters: list[tuple[Character, int, int]] = []
+
+        for screen_coords in self._screens_in_rect(camera_x, camera_y, width, height):
+            screen = self.screens[screen_coords]
+            base_x = screen_coords[0] * MAP_WIDTH
+            base_y = screen_coords[1] * MAP_HEIGHT
+
+            footprint_tile = screen.tiles.get("footprint")
+            if footprint_tile:
+                for fx, fy in player.get_footprints(screen_coords):
+                    world_fx = base_x + fx
+                    world_fy = base_y + fy
+                    if camera_x <= world_fx < camera_x + width and camera_y <= world_fy < camera_y + height:
+                        footprints.append(
+                            (world_fx - camera_x, world_fy - camera_y, footprint_tile)
+                        )
+
+            for enemy in screen.enemies:
+                if enemy and not getattr(enemy, "defeated", False):
+                    world_ex = base_x + enemy.x
+                    world_ey = base_y + enemy.y
+                    if camera_x <= world_ex < camera_x + width and camera_y <= world_ey < camera_y + height:
+                        enemies.append((enemy, world_ex - camera_x, world_ey - camera_y))
+
+            for character in screen.characters:
+                world_cx = base_x + character.x
+                world_cy = base_y + character.y
+                if camera_x <= world_cx < camera_x + width and camera_y <= world_cy < camera_y + height:
+                    characters.append(
+                        (character, world_cx - camera_x, world_cy - camera_y)
+                    )
+
+        player_view_x = world_x - camera_x
+        player_view_y = world_y - camera_y
+
+        return ViewportData(
+            tiles=tiles,
+            player_position=(player_view_x, player_view_y),
+            camera=(camera_x, camera_y),
+            enemies=enemies,
+            characters=characters,
+            footprints=footprints,
+        )
+
+
+@dataclass
+class ViewportData:
+    tiles: list[list[dict]]
+    player_position: tuple[int, int]
+    camera: tuple[int, int]
+    enemies: list[tuple[Enemy, int, int]]
+    characters: list[tuple[Character, int, int]]
+    footprints: list[tuple[int, int, dict]]
 
 
 def biome_for_row(row_index: int) -> str:
