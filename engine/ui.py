@@ -95,7 +95,13 @@ def draw_map(
     if enemies and not hide_enemies:
         for enemy in enemies:
             if enemy and not enemy.defeated:
-                console.print(enemy.x, enemy.y, enemy.char, fg=enemy.fg, bg=enemy.bg)
+                sprite = getattr(enemy, "sprite", None)
+                if sprite is not None:
+                    sprite.draw(console, enemy.x, enemy.y)
+                else:
+                    console.print(
+                        enemy.x, enemy.y, enemy.char, fg=enemy.fg, bg=enemy.bg
+                    )
     player_tile_bg = game_map[player.y][player.x]["bg"]
     console.print(
         player.x,

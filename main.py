@@ -23,65 +23,6 @@ from engine.ui import (
 from engine.world import build_world
 
 
-def build_world():
-    tile_cache: dict[str, dict] = {}
-    world_maps: dict[tuple[int, int], list[list[dict]]] = {}
-    screen_tiles: dict[tuple[int, int], dict] = {}
-    biomes: dict[tuple[int, int], str] = {}
-
-    for sy in range(WORLD_ROWS):
-        for sx in range(WORLD_COLUMNS):
-            biome = biome_for_row(sy)
-            palette = tile_cache.setdefault(biome, get_biome_tiles(biome))
-            coords = (sx, sy)
-            world_maps[coords] = generate_map(MAP_WIDTH, MAP_HEIGHT, palette)
-            screen_tiles[coords] = palette
-            biomes[coords] = biome
-
-    spawn_screen = (WORLD_COLUMNS // 2, WORLD_ROWS // 2)
-    spawn_map = world_maps[spawn_screen]
-    spawn_x, spawn_y = find_spawn(spawn_map)
-
-    enemies_by_screen: dict[tuple[int, int], list[Enemy]] = {}
-    toad_data = ENEMIES["stinky_forest_toad"]
-
-    for coords, local_map in world_maps.items():
-        exclude = {(spawn_x, spawn_y)} if coords == spawn_screen else set()
-        ex, ey = find_random_walkable(local_map, exclude=exclude)
-        if (
-            0 <= ex < MAP_WIDTH
-            and 0 <= ey < MAP_HEIGHT
-            and local_map[ey][ex]["walkable"]
-        ):
-            enemy = Enemy(
-                name=toad_data["name"],
-                char=toad_data["char"],
-                fg=toad_data["fg"],
-                bg=toad_data["bg"],
-                max_hp=toad_data["hp"],
-                attack_min=toad_data["attack_min"],
-                attack_max=toad_data["attack_max"],
-                reward_talents=toad_data["reward_talents"],
-                stats=toad_data["stats"],
-                x=ex,
-                y=ey,
-                screen_x=coords[0],
-                screen_y=coords[1],
-            )
-            enemies_by_screen[coords] = [enemy]
-        else:
-            enemies_by_screen[coords] = []
-
-    return (
-        world_maps,
-        screen_tiles,
-        biomes,
-        enemies_by_screen,
-        spawn_screen,
-        (spawn_x, spawn_y),
-    )
-
-
 def main():
     tileset, used_font = load_preferred_tileset()
     if used_font is not None:

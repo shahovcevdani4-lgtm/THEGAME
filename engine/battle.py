@@ -2,7 +2,10 @@
 import math
 import random
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from engine.assets import Sprite
 
 
 @dataclass
@@ -22,6 +25,7 @@ class Enemy:
     screen_y: int
     hp: Optional[int] = None
     defeated: bool = False
+    sprite: "Sprite | None" = None
 
     def __post_init__(self):
         self.hp = self.max_hp
