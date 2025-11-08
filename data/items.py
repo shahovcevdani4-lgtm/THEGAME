@@ -12,8 +12,13 @@ def _normalise_item(entry: dict) -> dict:
     normalised["icon"] = str(normalised.get("icon", ""))
     normalised["slot_type"] = str(normalised.get("slot_type", ""))
     normalised["two_handed"] = bool(normalised.get("two_handed", False))
-    if "sprite" in normalised and normalised["sprite"] is not None:
-        normalised["sprite"] = str(normalised["sprite"])
+    if "tile" in normalised and normalised["tile"]:
+        normalised["tile"] = str(normalised["tile"])
+    if "damage_bonus" in normalised:
+        try:
+            normalised["damage_bonus"] = int(normalised["damage_bonus"])
+        except (TypeError, ValueError):
+            normalised.pop("damage_bonus", None)
     return normalised
 
 

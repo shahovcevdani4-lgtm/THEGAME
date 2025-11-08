@@ -251,9 +251,35 @@ def find_random_walkable(
 
 
 def _enemy_id_for_biome(biome: str) -> str:
-    if biome == "winter":
-        return "living_snow"
-    return "stinky_forest_toad"
+    """Select an enemy identifier based on biome spawn weights."""
+
+    weighted: list[tuple[str, float]] = []
+    for enemy_id, data in ENEMIES.items():
+        spawn = data.get("spawn")
+        if not isinstance(spawn, dict):
+            continue
+        biomes = spawn.get("biomes")
+        if not isinstance(biomes, dict):
+            continue
+        try:
+            weight = float(biomes.get(biome, 0.0))
+        except (TypeError, ValueError):
+            weight = 0.0
+        if weight > 0:
+            weighted.append((enemy_id, weight))
+
+    if not weighted:
+        # Fall back to the first defined enemy to avoid empty maps.
+        return next(iter(ENEMIES))
+
+    total = sum(weight for _, weight in weighted)
+    roll = random.random() * total
+    cumulative = 0.0
+    for enemy_id, weight in weighted:
+        cumulative += weight
+        if roll <= cumulative:
+            return enemy_id
+    return weighted[-1][0]
 
 
 def build_world() -> World:

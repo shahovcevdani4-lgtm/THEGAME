@@ -43,8 +43,6 @@ def _normalise_tile(tile: Mapping[str, object]) -> dict[str, object]:
     for key in ("fg", "bg"):
         if key in normalised:
             normalised[key] = _colour_tuple(normalised[key])
-    if "sprite" in normalised and normalised["sprite"] is not None:
-        normalised["sprite"] = str(normalised["sprite"])
     return normalised
 
 

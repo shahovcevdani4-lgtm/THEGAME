@@ -2,12 +2,34 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from editor.data_manager import GameDataManager
+
+
+_TILES_DIR = Path(__file__).resolve().parents[1] / "data" / "tiles"
+
+
+def _sanitize_tile_name(name: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9_]+", "_", name.lower())
+    cleaned = cleaned.strip("_")
+    return cleaned or "texture"
+
+
+def _import_texture(source_path: str, *, hint: str | None = None) -> str:
+    source = Path(source_path)
+    if source.suffix.lower() != ".png":
+        raise ValueError("Ожидается файл PNG.")
+    target_name = _sanitize_tile_name(hint or source.stem)
+    _TILES_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = _TILES_DIR / f"{target_name}.png"
+    shutil.copyfile(source, target_path)
+    return target_name
 
 
 def _rgb_to_string(value: Any) -> str:
@@ -46,13 +68,42 @@ def _list_to_string(items: Any) -> str:
     return str(items)
 
 
-def _ensure_relative(path: str) -> str:
-    candidate = Path(path).expanduser()
-    try:
-        relative = candidate.relative_to(Path.cwd())
-        return str(relative)
-    except ValueError:
-        return str(candidate)
+def _weights_to_string(weights: Mapping[str, Any]) -> str:
+    parts: list[str] = []
+    for name, value in weights.items():
+        try:
+            weight = float(value)
+        except (TypeError, ValueError):
+            continue
+        parts.append(f"{name}={weight:g}")
+    return ", ".join(parts)
+
+
+def _string_to_weights(value: str) -> dict[str, float]:
+    stripped = value.strip()
+    if not stripped:
+        return {}
+    result: dict[str, float] = {}
+    for part in stripped.split(","):
+        chunk = part.strip()
+        if not chunk:
+            continue
+        if "=" in chunk:
+            name, weight_text = chunk.split("=", 1)
+        elif ":" in chunk:
+            name, weight_text = chunk.split(":", 1)
+        else:
+            raise ValueError("Используйте формат биом=вес")
+        name = name.strip()
+        if not name:
+            raise ValueError("Имя биома не может быть пустым")
+        text = weight_text.strip().replace(",", ".")
+        try:
+            weight = float(text)
+        except ValueError as exc:
+            raise ValueError(f"Некорректный вес для {name}: {weight_text.strip()}") from exc
+        result[name] = weight
+    return result
 
 
 class GameEditorApp(ttk.Frame):
@@ -176,7 +227,6 @@ class CreaturesEditor(ttk.Frame):
         self.name_var = tk.StringVar()
         self.char_var = tk.StringVar()
         self.tile_var = tk.StringVar()
-        self.sprite_var = tk.StringVar()
         self.fg_var = tk.StringVar()
         self.bg_var = tk.StringVar()
         self.stat_vars = {
@@ -196,7 +246,6 @@ class CreaturesEditor(ttk.Frame):
             ("Имя", self.name_var),
             ("Символ", self.char_var),
             ("Тайл", self.tile_var),
-            ("Спрайт", self.sprite_var),
             ("Цвет FG", self.fg_var),
             ("Цвет BG", self.bg_var),
         )
@@ -206,8 +255,8 @@ class CreaturesEditor(ttk.Frame):
             ttk.Label(row, text=label, width=15).pack(side=tk.LEFT)
             entry = ttk.Entry(row, textvariable=var)
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-            if label == "Спрайт":
-                ttk.Button(row, text="Выбрать", command=self._choose_sprite).pack(
+            if label == "Тайл":
+                ttk.Button(row, text="Импорт", command=self._choose_tile).pack(
                     side=tk.LEFT, padx=4
                 )
 
@@ -230,7 +279,18 @@ class CreaturesEditor(ttk.Frame):
             entry = ttk.Entry(row, textvariable=self.extra_vars[key])
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
             self.extra_rows[key] = entry
-        self.extra_frame.pack(fill=tk.X, pady=6)
+        self.spawn_var = tk.StringVar()
+        self.spawn_frame = ttk.Frame(self.extra_frame)
+        spawn_row = ttk.Frame(self.spawn_frame)
+        spawn_row.pack(fill=tk.X, pady=1)
+        ttk.Label(spawn_row, text="Спавн", width=15).pack(side=tk.LEFT)
+        ttk.Entry(spawn_row, textvariable=self.spawn_var).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        ttk.Label(
+            self.spawn_frame,
+            text="Формат: биом=вес, например summer=1, winter=0.2",
+        ).pack(anchor=tk.W, padx=2)
 
         ttk.Button(form, text="Сохранить", command=self.save_current).pack(
             anchor=tk.E, pady=6
@@ -246,6 +306,9 @@ class CreaturesEditor(ttk.Frame):
         self.extra_frame.pack_forget()
         if dataset == "enemies":
             self.extra_frame.pack(fill=tk.X, pady=6)
+            self.spawn_frame.pack(fill=tk.X, pady=2)
+        else:
+            self.spawn_frame.pack_forget()
         self.refresh()
 
     def refresh(self) -> None:
@@ -274,7 +337,6 @@ class CreaturesEditor(ttk.Frame):
             self.name_var,
             self.char_var,
             self.tile_var,
-            self.sprite_var,
             self.fg_var,
             self.bg_var,
         ):
@@ -283,6 +345,7 @@ class CreaturesEditor(ttk.Frame):
             var.set("")
         for var in self.extra_vars.values():
             var.set("")
+        self.spawn_var.set("")
 
     def _on_select(self) -> None:
         selection = self.listbox.curselection()
@@ -296,7 +359,6 @@ class CreaturesEditor(ttk.Frame):
         self.name_var.set(creature.get("name", ""))
         self.char_var.set(creature.get("char", ""))
         self.tile_var.set(creature.get("tile", ""))
-        self.sprite_var.set(creature.get("sprite", ""))
         self.fg_var.set(_rgb_to_string(creature.get("fg")))
         self.bg_var.set(_rgb_to_string(creature.get("bg")))
         stats = creature.get("stats", {})
@@ -304,13 +366,29 @@ class CreaturesEditor(ttk.Frame):
             self.stat_vars[key].set(str(stats.get(key, "")))
         for key in self.extra_vars:
             self.extra_vars[key].set(str(creature.get(key, "")))
+        spawn = creature.get("spawn", {})
+        if isinstance(spawn, dict):
+            self.spawn_var.set(_weights_to_string(spawn.get("biomes", {})))
+        else:
+            self.spawn_var.set("")
 
-    def _choose_sprite(self) -> None:
+    def _choose_tile(self) -> None:
         filename = filedialog.askopenfilename(
-            title="Выберите изображение", filetypes=[("Изображения", "*.png *.jpg *.jpeg *.gif"), ("Все файлы", "*.*")]
+            title="Выберите текстуру (PNG)",
+            filetypes=[("PNG", "*.png")],
         )
-        if filename:
-            self.sprite_var.set(_ensure_relative(filename))
+        if not filename:
+            return
+        hint = self.tile_var.get().strip() or self.id_var.get().strip() or None
+        try:
+            tile_name = _import_texture(filename, hint=hint)
+        except ValueError as exc:
+            messagebox.showerror("Ошибка", str(exc))
+            return
+        except OSError as exc:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить текстуру: {exc}")
+            return
+        self.tile_var.set(tile_name)
 
     def _collect_data(self) -> tuple[str, dict[str, Any]]:
         key = self.id_var.get().strip()
@@ -321,9 +399,6 @@ class CreaturesEditor(ttk.Frame):
             "char": self.char_var.get()[:1] if self.char_var.get() else "",
             "tile": self.tile_var.get().strip(),
         }
-        sprite = self.sprite_var.get().strip()
-        if sprite:
-            data["sprite"] = sprite
         fg = _string_to_rgb(self.fg_var.get())
         if fg is not None:
             data["fg"] = fg
@@ -342,6 +417,12 @@ class CreaturesEditor(ttk.Frame):
                 text = var.get().strip()
                 if text:
                     data[key] = int(text)
+            spawn_text = self.spawn_var.get().strip()
+            if spawn_text:
+                spawn_biomes = _string_to_weights(spawn_text)
+                if not spawn_biomes:
+                    raise ValueError("Укажите хотя бы один биом для спавна")
+                data["spawn"] = {"biomes": spawn_biomes}
         return key, data
 
     def save_current(self) -> None:
@@ -421,7 +502,6 @@ class TileForm(ttk.LabelFrame):
         self.char_var = tk.StringVar()
         self.walkable_var = tk.BooleanVar()
         self.tile_id_var = tk.StringVar()
-        self.sprite_var = tk.StringVar()
         self.fg_var = tk.StringVar()
         self.bg_var = tk.StringVar()
         self._build()
@@ -436,7 +516,12 @@ class TileForm(ttk.LabelFrame):
             row = ttk.Frame(self)
             row.pack(fill=tk.X, pady=1)
             ttk.Label(row, text=label, width=15).pack(side=tk.LEFT)
-            ttk.Entry(row, textvariable=var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+            entry = ttk.Entry(row, textvariable=var)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            if label == "Tile ID":
+                ttk.Button(row, text="Импорт", command=self._import_texture).pack(
+                    side=tk.LEFT, padx=4
+                )
 
         walk_row = ttk.Frame(self)
         walk_row.pack(fill=tk.X, pady=1)
@@ -449,16 +534,6 @@ class TileForm(ttk.LabelFrame):
             ttk.Label(row, text=f"Цвет {label}", width=15).pack(side=tk.LEFT)
             ttk.Entry(row, textvariable=var).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        sprite_row = ttk.Frame(self)
-        sprite_row.pack(fill=tk.X, pady=1)
-        ttk.Label(sprite_row, text="Спрайт", width=15).pack(side=tk.LEFT)
-        ttk.Entry(sprite_row, textvariable=self.sprite_var).pack(
-            side=tk.LEFT, fill=tk.X, expand=True
-        )
-        ttk.Button(sprite_row, text="Выбрать", command=self._choose_sprite).pack(
-            side=tk.LEFT, padx=4
-        )
-
         ttk.Button(self, text="Сохранить плитку", command=self._save).pack(
             anchor=tk.E, pady=4
         )
@@ -468,7 +543,6 @@ class TileForm(ttk.LabelFrame):
         self.char_var.set(data.get("char", ""))
         self.walkable_var.set(bool(data.get("walkable", False)))
         self.tile_id_var.set(data.get("tile_id", ""))
-        self.sprite_var.set(data.get("sprite", ""))
         self.fg_var.set(_rgb_to_string(data.get("fg")))
         self.bg_var.set(_rgb_to_string(data.get("bg")))
 
@@ -477,16 +551,25 @@ class TileForm(ttk.LabelFrame):
         self.char_var.set("")
         self.walkable_var.set(False)
         self.tile_id_var.set("")
-        self.sprite_var.set("")
         self.fg_var.set("")
         self.bg_var.set("")
 
-    def _choose_sprite(self) -> None:
+    def _import_texture(self) -> None:
         filename = filedialog.askopenfilename(
-            title="Выберите изображение", filetypes=[("Изображения", "*.png *.jpg *.jpeg *.gif"), ("Все файлы", "*.*")]
+            title="Выберите текстуру (PNG)", filetypes=[("PNG", "*.png")]
         )
-        if filename:
-            self.sprite_var.set(_ensure_relative(filename))
+        if not filename:
+            return
+        hint = self.tile_id_var.get().strip() or self.key_var.get().strip() or None
+        try:
+            tile_id = _import_texture(filename, hint=hint)
+        except ValueError as exc:
+            messagebox.showerror("Ошибка", str(exc))
+            return
+        except OSError as exc:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить текстуру: {exc}")
+            return
+        self.tile_id_var.set(tile_id)
 
     def _save(self) -> None:
         key = self.key_var.get().strip()
@@ -499,18 +582,16 @@ class TileForm(ttk.LabelFrame):
         except ValueError as exc:
             messagebox.showerror("Ошибка", str(exc))
             return
+        tile_id = _sanitize_tile_name(self.tile_id_var.get().strip() or key)
         tile: dict[str, Any] = {
             "char": self.char_var.get()[:1] if self.char_var.get() else "",
             "walkable": bool(self.walkable_var.get()),
-            "tile_id": self.tile_id_var.get().strip() or key,
+            "tile_id": tile_id,
         }
         if fg is not None:
             tile["fg"] = fg
         if bg is not None:
             tile["bg"] = bg
-        sprite = self.sprite_var.get().strip()
-        if sprite:
-            tile["sprite"] = sprite
         self.on_save({"key": key, "tile": tile})
 
 
@@ -1245,22 +1326,23 @@ class ItemsEditor(ttk.Frame):
         self.icon_var = tk.StringVar()
         self.slot_var = tk.StringVar()
         self.two_handed_var = tk.BooleanVar()
-        self.sprite_var = tk.StringVar()
+        self.tile_var = tk.StringVar()
+        self.damage_var = tk.StringVar()
 
         for label, var in (
             ("ID", self.id_var),
             ("Название", self.name_var),
             ("Иконка", self.icon_var),
             ("Слот", self.slot_var),
-            ("Спрайт", self.sprite_var),
+            ("Тайл", self.tile_var),
         ):
             row = ttk.Frame(form)
             row.pack(fill=tk.X, pady=1)
             ttk.Label(row, text=label, width=15).pack(side=tk.LEFT)
             entry = ttk.Entry(row, textvariable=var)
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-            if label == "Спрайт":
-                ttk.Button(row, text="Выбрать", command=self._choose_sprite).pack(
+            if label == "Тайл":
+                ttk.Button(row, text="Импорт", command=self._choose_tile).pack(
                     side=tk.LEFT, padx=4
                 )
 
@@ -1268,6 +1350,13 @@ class ItemsEditor(ttk.Frame):
         two_row.pack(fill=tk.X, pady=1)
         ttk.Label(two_row, text="Двуручный", width=15).pack(side=tk.LEFT)
         ttk.Checkbutton(two_row, variable=self.two_handed_var).pack(side=tk.LEFT)
+
+        damage_row = ttk.Frame(form)
+        damage_row.pack(fill=tk.X, pady=1)
+        ttk.Label(damage_row, text="Бонус урона", width=15).pack(side=tk.LEFT)
+        ttk.Entry(damage_row, textvariable=self.damage_var).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
 
         ttk.Button(form, text="Сохранить", command=self.save).pack(anchor=tk.E, pady=4)
 
@@ -1289,9 +1378,15 @@ class ItemsEditor(ttk.Frame):
                 "slot_type": self.slot_var.get().strip(),
                 "two_handed": bool(self.two_handed_var.get()),
             }
-            sprite = self.sprite_var.get().strip()
-            if sprite:
-                item["sprite"] = sprite
+            tile = self.tile_var.get().strip()
+            if tile:
+                item["tile"] = _sanitize_tile_name(tile)
+            damage = self.damage_var.get().strip()
+            if damage:
+                try:
+                    item["damage_bonus"] = int(damage)
+                except ValueError as exc:
+                    raise ValueError("Бонус урона должен быть числом") from exc
             items = self._items()
             if self.current_key and self.current_key != key:
                 items.pop(self.current_key, None)
@@ -1304,7 +1399,8 @@ class ItemsEditor(ttk.Frame):
             self.name_var,
             self.icon_var,
             self.slot_var,
-            self.sprite_var,
+            self.tile_var,
+            self.damage_var,
         ):
             var.set("")
         self.two_handed_var.set(False)
@@ -1321,14 +1417,26 @@ class ItemsEditor(ttk.Frame):
         self.icon_var.set(item.get("icon", ""))
         self.slot_var.set(item.get("slot_type", ""))
         self.two_handed_var.set(bool(item.get("two_handed", False)))
-        self.sprite_var.set(item.get("sprite", ""))
+        self.tile_var.set(item.get("tile", ""))
+        damage_bonus = item.get("damage_bonus")
+        self.damage_var.set(str(damage_bonus) if damage_bonus is not None else "")
 
-    def _choose_sprite(self) -> None:
+    def _choose_tile(self) -> None:
         filename = filedialog.askopenfilename(
-            title="Выберите изображение", filetypes=[("Изображения", "*.png *.jpg *.jpeg *.gif"), ("Все файлы", "*.*")]
+            title="Выберите текстуру (PNG)", filetypes=[("PNG", "*.png")]
         )
-        if filename:
-            self.sprite_var.set(_ensure_relative(filename))
+        if not filename:
+            return
+        hint = self.tile_var.get().strip() or self.id_var.get().strip() or None
+        try:
+            tile_name = _import_texture(filename, hint=hint)
+        except ValueError as exc:
+            messagebox.showerror("Ошибка", str(exc))
+            return
+        except OSError as exc:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить текстуру: {exc}")
+            return
+        self.tile_var.set(tile_name)
 
     def add(self) -> None:
         key = simpledialog.askstring("Новый предмет", "ID предмета:")
@@ -1391,9 +1499,16 @@ class ItemsEditor(ttk.Frame):
             "slot_type": self.slot_var.get().strip(),
             "two_handed": bool(self.two_handed_var.get()),
         }
-        sprite = self.sprite_var.get().strip()
-        if sprite:
-            item["sprite"] = sprite
+        tile = self.tile_var.get().strip()
+        if tile:
+            item["tile"] = _sanitize_tile_name(tile)
+        damage = self.damage_var.get().strip()
+        if damage:
+            try:
+                item["damage_bonus"] = int(damage)
+            except ValueError:
+                messagebox.showerror("Ошибка", "Бонус урона должен быть числом")
+                return
         items = self._items()
         if self.current_key and self.current_key != key:
             items.pop(self.current_key, None)

@@ -13,6 +13,21 @@ def _normalise_enemy(entry: dict) -> dict:
             normalised[key] = tuple(normalised[key])
     if "stats" in normalised and isinstance(normalised["stats"], dict):
         normalised["stats"] = dict(normalised["stats"])
+    spawn = normalised.get("spawn")
+    if isinstance(spawn, dict):
+        biomes = spawn.get("biomes")
+        if isinstance(biomes, dict):
+            weights: dict[str, float] = {}
+            for name, value in biomes.items():
+                try:
+                    weights[str(name)] = float(value)
+                except (TypeError, ValueError):
+                    continue
+            normalised["spawn"] = {"biomes": weights}
+        else:
+            normalised.pop("spawn", None)
+    else:
+        normalised.pop("spawn", None)
     return normalised
 
 

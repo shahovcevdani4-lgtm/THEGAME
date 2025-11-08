@@ -44,6 +44,12 @@
         "str": 4,
         "agi": 3,
         "int": 1
+      },
+      "spawn": {
+        "biomes": {
+          "summer": 1.0,
+          "drought": 0.8
+        }
       }
     },
     "living_snow": {
@@ -68,6 +74,11 @@
         "str": 4,
         "agi": 3,
         "int": 1
+      },
+      "spawn": {
+        "biomes": {
+          "winter": 1.0
+        }
       }
     }
   },
@@ -88,13 +99,15 @@
       "name": "Кинжал",
       "icon": "/",
       "slot_type": "weapon_main",
-      "two_handed": false
+      "two_handed": false,
+      "damage_bonus": 2
     },
     "halberd": {
       "name": "Алебарда",
       "icon": "†",
       "slot_type": "weapon_main",
-      "two_handed": true
+      "two_handed": true,
+      "damage_bonus": 4
     }
   },
   "tiles": {

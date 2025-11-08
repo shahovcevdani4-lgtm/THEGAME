@@ -33,6 +33,7 @@ class InventoryItem:
     icon: str
     slot_type: str
     two_handed: bool = False
+    damage_bonus: int = 0
 
     def symbol(self) -> str:
         """Return the preferred character for UI rendering."""
@@ -198,7 +199,7 @@ class Inventory:
             success = self._equip_to_single_slot("upper", item)
         elif item.slot_type == "boots":
             success = self._equip_to_single_slot("boots", item)
-        elif item.slot_type == "weapon":
+        elif item.slot_type == "weapon" or item.slot_type in self.WEAPON_SLOTS:
             success = self._equip_weapon(item)
         else:
             self.last_message = "Этот предмет нельзя активировать."
@@ -206,7 +207,9 @@ class Inventory:
 
         if success:
             self.passive_slots[passive_index] = None
-            target_section = "активные слоты" if item.slot_type != "weapon" else "оружие"
+            target_section = "активные слоты"
+            if item.slot_type == "weapon" or item.slot_type in self.WEAPON_SLOTS:
+                target_section = "оружие"
             self.last_message = f"{item.name} перемещён в {target_section}."
         return success
 
@@ -315,6 +318,12 @@ class Inventory:
     def passive_index_range(self) -> range:
         return range(len(self.ACTIVE_SLOT_ORDER), self.total_slots)
 
+    def weapon_damage_bonus(self) -> int:
+        bonus = 0
+        for item in self._collect_weapon_items():
+            bonus += getattr(item, "damage_bonus", 0)
+        return bonus
+
 
 def build_inventory_context(player: "Player", talents_label: str) -> list[tuple[str, tuple[int, int, int]]]:
     inventory = player.inventory
@@ -324,6 +333,21 @@ def build_inventory_context(player: "Player", talents_label: str) -> list[tuple[
     lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
     stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
     lines.append((stats_line, (200, 255, 200)))
+    lines.append(
+        (
+            f"Здоровье: {player.hp}/{player.max_hp}",
+            (255, 180, 180),
+        )
+    )
+    base_max = max(1, player.strength)
+    bonus = inventory.weapon_damage_bonus()
+    total_max = base_max + bonus
+    lines.append(
+        (
+            f"Урон: 1-{total_max} (база {base_max}, оружие +{bonus})",
+            (255, 220, 180),
+        )
+    )
     lines.append((talents_label, (255, 215, 0)))
     lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
 
