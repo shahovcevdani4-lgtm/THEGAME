@@ -7,37 +7,18 @@ from typing import Iterable, Sequence
 import pygame
 
 from engine.constants import SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
+from engine.inventory import build_inventory_context
 
 
 DEFAULT_TEXT_COLOR = (240, 240, 240)
-
-
-def _slot_symbol(item) -> str:
-    if item is None:
-        return "·"
-    symbol = getattr(item, "symbol", None)
-    if callable(symbol):
-        return symbol()
-    if isinstance(item, str) and len(item) == 1:
-        return item
-    return str(item)[0]
-
-
-def _is_two_handed_slot(inventory, slot_name: str) -> bool:
-    item = inventory.active_slots.get(slot_name)
-    if not item or not getattr(item, "two_handed", False):
-        return False
-    other = "weapon_off" if slot_name == "weapon_main" else "weapon_main"
-    return inventory.active_slots.get(other) is item
-
-
 class PygameRenderer:
     """Small helper responsible for loading tiles and drawing the UI."""
 
     def __init__(self) -> None:
         pygame.init()
         pygame.font.init()
-        self.tile_size = TILE_SIZE
+        self.base_tile_size = TILE_SIZE
+        self.tile_size = self.base_tile_size * 2
         self.width = SCREEN_WIDTH * self.tile_size
         self.height = SCREEN_HEIGHT * self.tile_size
         self._display_flags = pygame.RESIZABLE
@@ -64,9 +45,7 @@ class PygameRenderer:
         for image_path in sorted(directory.glob("*.png")):
             surface = pygame.image.load(str(image_path)).convert_alpha()
             if surface.get_width() != self.tile_size or surface.get_height() != self.tile_size:
-                surface = pygame.transform.smoothscale(
-                    surface, (self.tile_size, self.tile_size)
-                )
+                surface = pygame.transform.scale(surface, (self.tile_size, self.tile_size))
             tiles[image_path.stem] = surface
         return tiles
 
@@ -92,7 +71,7 @@ class PygameRenderer:
         if scaled_width == base_width and scaled_height == base_height:
             scaled_surface = self.canvas
         else:
-            scaled_surface = pygame.transform.smoothscale(
+            scaled_surface = pygame.transform.scale(
                 self.canvas, (scaled_width, scaled_height)
             )
 
@@ -126,8 +105,10 @@ class PygameRenderer:
         self.window_size = self.display.get_size()
         self.canvas = pygame.Surface((self.width, self.height)).convert()
 
-    def tick(self, fps: int = 60) -> None:
-        self.clock.tick(fps)
+    def tick(self, fps: int = 60) -> float:
+        """Ограничивает FPS и возвращает длительность кадра в секундах."""
+
+        return self.clock.tick(fps) / 1000.0
 
     def _resolve_key(self, key: str | None, fallback: str | None = None) -> str:
         if key and key in self.tiles:
@@ -149,16 +130,16 @@ class PygameRenderer:
 
     def draw_map(
         self,
-        game_map,
+        tiles,
         player,
+        player_position,
         *,
         enemies=None,
         characters=None,
         hide_enemies: bool = False,
-        footprints: Iterable[tuple[int, int]] | None = None,
-        footprint_tile: dict | None = None,
+        footprints: Iterable[tuple[int, int, dict]] | None = None,
     ) -> None:
-        for y, row in enumerate(game_map):
+        for y, row in enumerate(tiles):
             for x, tile in enumerate(row):
                 tile_name = tile.get("tile_id") or tile.get("sprite") or tile.get("char")
                 ground_name = tile.get("ground_tile")
@@ -172,30 +153,26 @@ class PygameRenderer:
                     overlay_surface = self.tiles.get(resolved_tile_key, self.default_tile)
                     self.canvas.blit(overlay_surface, pos)
 
-        if footprints and footprint_tile:
-            footprint_name = footprint_tile.get("tile_id", "footprint")
-            footprint_surface = self._surface_for(footprint_name, "footprint")
-            for fx, fy in footprints:
+        if footprints:
+            for fx, fy, footprint_tile in footprints:
+                footprint_name = footprint_tile.get("tile_id", "footprint")
+                footprint_surface = self._surface_for(footprint_name, "footprint")
                 self.canvas.blit(
                     footprint_surface, (fx * self.tile_size, fy * self.tile_size)
                 )
 
         if enemies and not hide_enemies:
-            for enemy in enemies:
+            for enemy, ex, ey in enemies:
                 if enemy and not enemy.defeated:
                     tile_name = getattr(enemy, "tile_key", None) or "enemy"
                     surface = self._surface_for(tile_name, "enemy")
-                    self.canvas.blit(
-                        surface, (enemy.x * self.tile_size, enemy.y * self.tile_size)
-                    )
+                    self.canvas.blit(surface, (ex * self.tile_size, ey * self.tile_size))
 
         if characters:
-            for character in characters:
+            for character, cx, cy in characters:
                 tile_name = getattr(character, "tile_key", None) or "warlock"
                 surface = self._surface_for(tile_name, "warlock")
-                self.canvas.blit(
-                    surface, (character.x * self.tile_size, character.y * self.tile_size)
-                )
+                self.canvas.blit(surface, (cx * self.tile_size, cy * self.tile_size))
 
         player_key = self._resolve_key(getattr(player, "tile_key", None), "player")
         base_surface = self.tiles.get(player_key, self.default_tile)
@@ -203,7 +180,8 @@ class PygameRenderer:
             player_surface = self._flipped_surface(player_key, base_surface)
         else:
             player_surface = base_surface
-        self.canvas.blit(player_surface, (player.x * self.tile_size, player.y * self.tile_size))
+        px, py = player_position
+        self.canvas.blit(player_surface, (px * self.tile_size, py * self.tile_size))
 
     def _draw_text_panel(
         self,
@@ -298,10 +276,10 @@ class PygameRenderer:
 
         slots_y = 16 + line_height + 4
         for index, slot_name in enumerate(inventory.ACTIVE_SLOT_ORDER):
-            slot_char = _slot_symbol(inventory.active_slots.get(slot_name))
+            slot_char = inventory.active_slot_symbol(slot_name)
             slot_x = 24 + index * (slot_size + gap)
             is_selected = index == inventory.cursor_index
-            is_two_handed = _is_two_handed_slot(inventory, slot_name)
+            is_two_handed = inventory.is_two_handed_slot(slot_name)
             color = (90, 70, 120) if is_selected else (55, 55, 80)
             if is_two_handed and not is_selected:
                 color = (70, 50, 90)
@@ -321,7 +299,8 @@ class PygameRenderer:
         for row in range(passive_rows):
             for col in range(inventory.columns):
                 slot_index = total_active + row * inventory.columns + col
-                slot_char = _slot_symbol(inventory.slot_at(slot_index))
+                passive_index = slot_index - total_active
+                slot_char = inventory.passive_slot_symbol(passive_index)
                 slot_x = 24 + col * (slot_size + gap)
                 slot_y = grid_start_y + row * (slot_size + 6)
                 is_selected = slot_index == inventory.cursor_index
@@ -335,38 +314,15 @@ class PygameRenderer:
 
         self.canvas.blit(panel, (origin_x, origin_y))
 
-        context_height = 8 + 7 * (line_height + 2)
+        context_lines = build_inventory_context(player, talents_label)
+        visible_lines = context_lines[:7]
+        if not visible_lines:
+            visible_lines = [("", DEFAULT_TEXT_COLOR)]
+        context_height = 8 + len(visible_lines) * (line_height + 2)
         context = pygame.Surface((self.width, context_height), pygame.SRCALPHA)
         context.fill((15, 15, 35, 235))
 
-        lines: list[tuple[str, tuple[int, int, int]]] = []
-        lines.append((f"Имя: {player.name}", (245, 245, 245)))
-        lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
-        stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
-        lines.append((stats_line, (200, 255, 200)))
-        lines.append((talents_label, (255, 215, 0)))
-        lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
-
-        selected = inventory.selected_item()
-        if selected is not None:
-            descriptor = selected.slot_type
-            if descriptor == "upper":
-                descriptor = "верхняя одежда"
-            elif descriptor == "boots":
-                descriptor = "обувь"
-            elif descriptor == "weapon":
-                descriptor = "оружие"
-            item_line = f"Выбрано: {selected.name} ({descriptor})"
-            if getattr(selected, "two_handed", False):
-                item_line += " — двуручное"
-            lines.append((item_line, (210, 230, 255)))
-
-        if inventory.last_message:
-            lines.append((inventory.last_message, (255, 230, 120)))
-
-        lines.append(("Управление: WASD — выбор, E — перенос, I — закрыть", (180, 180, 200)))
-
-        for index, (text, color) in enumerate(lines[:7]):
+        for index, (text, color) in enumerate(visible_lines):
             rendered = self.small_font.render(text, True, color)
             context.blit(rendered, (16, 8 + index * (line_height + 2)))
 

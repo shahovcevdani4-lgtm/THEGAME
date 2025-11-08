@@ -2,6 +2,7 @@
 import random
 
 from data.tiles import TILES
+from engine.constants import AGILITY_SPEED_BONUS, BASE_MOVEMENT_SPEED
 from engine.inventory import Inventory, InventoryItem
 
 
@@ -52,6 +53,21 @@ class Player:
 
     def attack_damage(self) -> int:
         return random.randint(1, max(1, self.strength))
+
+    @property
+    def movement_speed(self) -> float:
+        """Возвращает скорость передвижения в клетках в секунду."""
+
+        return BASE_MOVEMENT_SPEED + self.agility * AGILITY_SPEED_BONUS
+
+    @property
+    def movement_interval(self) -> float:
+        """Минимальное время между шагами в секундах."""
+
+        speed = self.movement_speed
+        if speed <= 0:
+            return 0.0
+        return 1.0 / speed
 
     def position(self) -> tuple[int, int, int, int]:
         return self.screen_x, self.screen_y, self.x, self.y

@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Iterable, List, Sequence
+from typing import ClassVar, Iterable, List, Sequence, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from engine.player import Player
 
 
 _ACTIVE_SLOT_ORDER: Sequence[str] = (
@@ -119,6 +122,23 @@ class Inventory:
     def clear_message(self) -> None:
         self.last_message = ""
 
+    @staticmethod
+    def display_symbol(item) -> str:
+        if item is None:
+            return "·"
+        symbol = getattr(item, "symbol", None)
+        if callable(symbol):
+            return symbol()
+        if isinstance(item, str) and len(item) == 1:
+            return item
+        return str(item)[0]
+
+    def active_slot_symbol(self, slot_name: str) -> str:
+        return self.display_symbol(self.active_slots.get(slot_name))
+
+    def passive_slot_symbol(self, index: int) -> str:
+        return self.display_symbol(self.passive_slots[index])
+
     def move_cursor(self, dx: int, dy: int) -> None:
         """Move the selection cursor across active and passive slots."""
 
@@ -129,6 +149,13 @@ class Inventory:
         new_y = max(0, min(self.rows - 1, y + dy))
         self.cursor_index = min(self.total_slots - 1, new_y * self.columns + new_x)
         self.clear_message()
+
+    def is_two_handed_slot(self, slot_name: str) -> bool:
+        item = self.active_slots.get(slot_name)
+        if not item or not getattr(item, "two_handed", False):
+            return False
+        other = "weapon_off" if slot_name == "weapon_main" else "weapon_main"
+        return self.active_slots.get(other) is item
 
     def transfer_selected(self) -> bool:
         """Move the selected item between active and passive sections."""
@@ -286,3 +313,43 @@ class Inventory:
 
     def passive_index_range(self) -> range:
         return range(len(self.ACTIVE_SLOT_ORDER), self.total_slots)
+
+
+def build_inventory_context(player: "Player", talents_label: str) -> list[tuple[str, tuple[int, int, int]]]:
+    inventory = player.inventory
+    lines: list[tuple[str, tuple[int, int, int]]] = []
+
+    lines.append((f"Имя: {player.name}", (245, 245, 245)))
+    lines.append((f"Класс: {player.character_class}", (200, 200, 255)))
+    stats_line = f"STR {player.strength}  AGI {player.agility}  INT {player.intelligence}"
+    lines.append((stats_line, (200, 255, 200)))
+    lines.append((talents_label, (255, 215, 0)))
+    lines.append((f"Слот: {inventory.slot_label(inventory.cursor_index)}", (220, 220, 220)))
+
+    selected = inventory.selected_item()
+    if selected is not None:
+        descriptor = selected.slot_type
+        if descriptor == "upper":
+            descriptor = "верхняя одежда"
+        elif descriptor == "boots":
+            descriptor = "обувь"
+        elif descriptor == "weapon":
+            descriptor = "оружие"
+        item_line = f"Выбрано: {selected.name} ({descriptor})"
+        if getattr(selected, "two_handed", False):
+            item_line += " — двуручное"
+        lines.append((item_line, (210, 230, 255)))
+        description = getattr(selected, "description", "")
+        if description:
+            for chunk in str(description).split("\n"):
+                if chunk.strip():
+                    lines.append((chunk.strip(), (190, 200, 220)))
+
+    if inventory.last_message:
+        lines.append((inventory.last_message, (255, 230, 120)))
+
+    lines.append(("Управление: WASD — выбор, E — перенос, I — закрыть", (180, 180, 200)))
+
+    return lines
+
+
