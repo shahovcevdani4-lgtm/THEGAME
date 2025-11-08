@@ -23,6 +23,7 @@ class Player:
         self.screen_x = screen_x
         self.screen_y = screen_y
         self.tile = tile or TILES["player"].copy()
+        self.tile_key = self.tile.get("tile_id", "player")
         self.name = name
         self.character_class = character_class
         self.stats = stats
@@ -38,15 +39,15 @@ class Player:
         return self.stats.get("str", 0)
 
     @property
-    def dexterity(self) -> int:
-        return self.stats.get("dex", 0)
+    def agility(self) -> int:
+        return self.stats.get("agi", 0)
 
     @property
     def intelligence(self) -> int:
         return self.stats.get("int", 0)
 
     def average_power(self) -> float:
-        return (self.strength + self.dexterity + self.intelligence) / 3
+        return (self.strength + self.agility + self.intelligence) / 3
 
     def attack_damage(self) -> int:
         return random.randint(1, max(1, self.strength))
