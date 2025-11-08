@@ -125,7 +125,7 @@ def show_class_menu(console, context, classes):
                     return list(classes.keys())[1]
 
 
-def draw_battle_ui(console, battle, talents_text: str):
+def draw_battle_ui(console, battle, talents_label: str):
     bribe_cost = battle.bribe_cost()
     turn_order = (
         "игрок" if battle.player.average_power() >= battle.enemy.average_power() else "враг"
@@ -146,6 +146,54 @@ def draw_battle_ui(console, battle, talents_text: str):
     ]
 
     lines.extend(battle.log[-6:] or ["..."])
-    lines.extend(["", talents_text])
+    lines.extend(["", talents_label])
 
     draw_text_window(console, lines, padding=2)
+
+
+def _slot_symbol(item) -> str:
+    if item is None:
+        return "·"
+    if isinstance(item, str) and len(item) == 1:
+        return item
+    return "*"
+
+
+def draw_inventory(console, inventory, talents_label: str) -> None:
+    padding = 1
+    slot_width = 3
+    horizontal_gap = 1
+    grid_width = inventory.columns * slot_width + (inventory.columns - 1) * horizontal_gap
+    frame_width = grid_width + 2 * padding + 2
+    frame_height = inventory.rows + 2 * padding + 4
+
+    start_x = max(0, (console.width - frame_width) // 2)
+    start_y = max(0, (console.height - frame_height) // 2)
+
+    console.draw_frame(
+        start_x,
+        start_y,
+        frame_width,
+        frame_height,
+        fg=(200, 200, 200),
+        bg=(20, 20, 20),
+        clear=False,
+    )
+
+    for row in range(inventory.rows):
+        for col in range(inventory.columns):
+            idx = row * inventory.columns + col
+            slot_char = _slot_symbol(inventory.slot_at(idx))
+            slot_x = start_x + padding + 1 + col * (slot_width + horizontal_gap)
+            slot_y = start_y + padding + 1 + row
+            bg = (70, 70, 120) if idx == inventory.cursor_index else (40, 40, 60)
+            console.print(slot_x, slot_y, f"[{slot_char}]", fg=(230, 230, 230), bg=bg)
+
+    talents_y = start_y + padding + 1 + inventory.rows + 1
+    console.print(
+        start_x + padding + 1,
+        talents_y,
+        talents_label,
+        fg=(255, 215, 0),
+        bg=(20, 20, 20),
+    )

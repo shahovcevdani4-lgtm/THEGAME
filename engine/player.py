@@ -2,6 +2,8 @@
 import random
 
 from data.tiles import TILES
+from engine.inventory import Inventory
+
 
 
 class Player:
@@ -25,6 +27,7 @@ class Player:
         self.hp = self.max_hp
         self.talents = 100
         self._footprints: dict[tuple[int, int], list[tuple[int, int]]] = {}
+        self.inventory = Inventory()
 
     @property
     def strength(self) -> int:
