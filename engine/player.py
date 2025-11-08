@@ -111,8 +111,8 @@ class Player:
         starters = [
             InventoryItem("Тёплый плащ", "C", "upper"),
             InventoryItem("Походные сапоги", "B", "boots"),
-            InventoryItem("Кинжал", "/", "weapon"),
-            InventoryItem("Алебарда", "†", "weapon", two_handed=True),
+            InventoryItem("Кинжал", "/", "weapon", damage_bonus=2),
+            InventoryItem("Алебарда", "†", "weapon", two_handed=True, damage_bonus=4),
         ]
 
         for index, item in enumerate(starters):

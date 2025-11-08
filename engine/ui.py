@@ -99,25 +99,17 @@ def draw_map(
     if enemies and not hide_enemies:
         for enemy, ex, ey in enemies:
             if enemy and not getattr(enemy, "defeated", False):
-                sprite = getattr(enemy, "sprite", None)
-                if sprite is not None:
-                    sprite.draw(console, ex, ey)
-                else:
-                    console.print(ex, ey, enemy.char, fg=enemy.fg, bg=enemy.bg)
+                console.print(ex, ey, enemy.char, fg=enemy.fg, bg=enemy.bg)
 
     if characters:
         for character, cx, cy in characters:
-            sprite = getattr(character, "sprite", None)
-            if sprite is not None:
-                sprite.draw(console, cx, cy)
-            else:
-                console.print(
-                    cx,
-                    cy,
-                    character.char,
-                    fg=character.fg,
-                    bg=character.bg,
-                )
+            console.print(
+                cx,
+                cy,
+                character.char,
+                fg=character.fg,
+                bg=character.bg,
+            )
 
     px, py = player_position
     if 0 <= py < len(tiles) and 0 <= px < len(tiles[py]):

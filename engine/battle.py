@@ -2,10 +2,7 @@
 import math
 import random
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from engine.assets import Sprite
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -25,7 +22,6 @@ class Enemy:
     screen_y: int
     hp: Optional[int] = None
     defeated: bool = False
-    sprite: "Sprite | None" = None
     tile_key: str | None = None
 
     def __post_init__(self):

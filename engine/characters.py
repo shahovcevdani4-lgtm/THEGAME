@@ -2,13 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple
 
 from engine.inventory import Inventory
-
-if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checking
-    from engine.assets import Sprite
-
 
 @dataclass
 class Character:
@@ -24,7 +20,6 @@ class Character:
     screen_x: int
     screen_y: int
     inventory: Inventory = field(default_factory=Inventory)
-    sprite: "Sprite | None" = None
     tile_key: str | None = None
 
     @property

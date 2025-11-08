@@ -29,13 +29,6 @@ from engine.world import build_world
 USE_PYGAME = True
 
 
-def _active_direction(order: list, mapping: dict) -> tuple[int, int] | None:
-    for key in reversed(order):
-        if key in mapping:
-            return mapping[key]
-    return None
-
-
 def _status_label(player: Player) -> str:
     return f"Золотые таланты: {player.talents}"
 
@@ -167,9 +160,6 @@ def run_ascii() -> None:
         KeySym.d: (1, 0),
     }
 
-    held_directions: dict[KeySym, tuple[int, int]] = {}
-    held_order: list[KeySym] = []
-    movement_progress = 0.0
     last_time = time.perf_counter()
 
     with tcod.context.new_terminal(
@@ -212,13 +202,6 @@ def run_ascii() -> None:
                 event = context.convert_event(raw_event)
                 if event.type == "QUIT":
                     raise SystemExit()
-
-                if event.type == "KEYUP":
-                    if event.sym in movement_keys:
-                        held_directions.pop(event.sym, None)
-                        if event.sym in held_order:
-                            held_order[:] = [key for key in held_order if key != event.sym]
-                    continue
 
                 if event.type != "KEYDOWN":
                     continue
@@ -266,45 +249,17 @@ def run_ascii() -> None:
                 if event.sym in (KeySym.I, KeySym.i):
                     inventory_open = True
                     player.inventory.clear_message()
-                    held_directions.clear()
-                    held_order.clear()
-                    movement_progress = 0.0
                     continue
 
-                if event.sym in movement_keys:
-                    if event.sym not in held_directions:
-                        held_directions[event.sym] = movement_keys[event.sym]
-                        held_order.append(event.sym)
-                    interval = player.movement_interval
-                    if interval > 0:
-                        movement_progress = max(movement_progress, interval)
+                if event.sym in movement_keys and not current_battle and not inventory_open:
+                    direction = movement_keys[event.sym]
+                    moved, new_battle = attempt_player_move(
+                        player, world, direction[0], direction[1]
+                    )
+                    if new_battle is not None:
+                        current_battle = new_battle
+                        inventory_open = False
                     continue
-
-            if not current_battle and not inventory_open:
-                direction = _active_direction(held_order, held_directions)
-                if direction:
-                    movement_progress += delta
-                    interval = player.movement_interval
-                    if interval > 0:
-                        while movement_progress >= interval:
-                            moved, new_battle = attempt_player_move(
-                                player, world, direction[0], direction[1]
-                            )
-                            if not moved:
-                                movement_progress = min(movement_progress, interval)
-                                break
-                            movement_progress -= interval
-                            if new_battle is not None:
-                                current_battle = new_battle
-                                inventory_open = False
-                                held_directions.clear()
-                                held_order.clear()
-                                movement_progress = 0.0
-                                break
-                else:
-                    movement_progress = 0.0
-            else:
-                movement_progress = 0.0
 
             console.clear()
             viewport = world.build_viewport(player)
@@ -361,10 +316,6 @@ def run_pygame() -> None:
             pygame.K_a: (-1, 0),
             pygame.K_d: (1, 0),
         }
-        held_directions: dict[int, tuple[int, int]] = {}
-        held_order: list[int] = []
-        movement_progress = 0.0
-
         while True:
             delta = renderer.tick()
             world.advance_time(delta)
@@ -374,12 +325,6 @@ def run_pygame() -> None:
                     raise SystemExit()
                 if event.type in {pygame.VIDEORESIZE, pygame.WINDOWRESIZED}:
                     renderer.set_window_size((event.w, event.h))
-                    continue
-                if event.type == pygame.KEYUP:
-                    if event.key in movement_keys:
-                        held_directions.pop(event.key, None)
-                        if event.key in held_order:
-                            held_order[:] = [key for key in held_order if key != event.key]
                     continue
                 if event.type != pygame.KEYDOWN:
                     continue
@@ -426,45 +371,17 @@ def run_pygame() -> None:
                 if key == pygame.K_i:
                     inventory_open = True
                     player.inventory.clear_message()
-                    held_directions.clear()
-                    held_order.clear()
-                    movement_progress = 0.0
                     continue
 
-                if key in movement_keys:
-                    if key not in held_directions:
-                        held_directions[key] = movement_keys[key]
-                        held_order.append(key)
-                    interval = player.movement_interval
-                    if interval > 0:
-                        movement_progress = max(movement_progress, interval)
+                if key in movement_keys and not current_battle and not inventory_open:
+                    direction = movement_keys[key]
+                    moved, new_battle = attempt_player_move(
+                        player, world, direction[0], direction[1]
+                    )
+                    if new_battle is not None:
+                        current_battle = new_battle
+                        inventory_open = False
                     continue
-
-            if not current_battle and not inventory_open:
-                direction = _active_direction(held_order, held_directions)
-                if direction:
-                    movement_progress += delta
-                    interval = player.movement_interval
-                    if interval > 0:
-                        while movement_progress >= interval:
-                            moved, new_battle = attempt_player_move(
-                                player, world, direction[0], direction[1]
-                            )
-                            if not moved:
-                                movement_progress = min(movement_progress, interval)
-                                break
-                            movement_progress -= interval
-                            if new_battle is not None:
-                                current_battle = new_battle
-                                inventory_open = False
-                                held_directions.clear()
-                                held_order.clear()
-                                movement_progress = 0.0
-                                break
-                else:
-                    movement_progress = 0.0
-            else:
-                movement_progress = 0.0
 
             renderer.clear()
             viewport = world.build_viewport(player)
